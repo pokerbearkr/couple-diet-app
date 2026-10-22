@@ -2463,6 +2463,26 @@ async function deletePenaltyFromSupabase(penaltyId) {
   }
 }
 
+async function handleResetWeightData() {
+  if (confirm('저장된 모든 체중 기록(오동원 & 김해솔)을 초기화할까요?\n* 클라우드 DB와 기기에서 체중 데이터가 완전히 삭제됩니다.')) {
+    store.data.weightLogs = { boyfriend: [], girlfriend: [] };
+    store.save();
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('weight_logs').delete().neq('user_role', 'none');
+      } catch (e) {
+        console.error('Supabase weight reset error:', e);
+      }
+    }
+
+    isWeightUnlocked = false;
+    renderStatsScreen();
+    alert('체중 기록이 깨끗하게 초기화되었습니다! ✨');
+    closeModal('modal-settings');
+  }
+}
+
 function handleResetAppData() {
   if (confirm('기기에 저장된 모든 출석, 체중, 식단, 미션 기록을 깨끗하게 초기화할까요?')) {
     store.resetAll();

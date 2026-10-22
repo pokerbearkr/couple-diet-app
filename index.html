@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=3.6">
+  <link rel="stylesheet" href="style.css?v=3.7">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -612,7 +612,8 @@
         </div>
 
         <button class="btn-primary" style="width:100%; padding:14px; margin-bottom:10px;" onclick="saveAllAppSettings()">설정 및 비밀번호 저장하기</button>
-        <button class="btn-primary" style="width:100%; padding:10px; background:#ECEFF1; color:#546E7A; font-size:0.8rem; box-shadow:none;" onclick="handleResetAppData()">🧹 로컬 데이터 전체 비우기 (초기화)</button>
+        <button class="btn-primary" style="width:100%; padding:10px; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; font-size:0.8rem; box-shadow:none; margin-bottom:8px;" onclick="handleResetWeightData()">⚖️ 체중 기록만 전체 삭제/초기화</button>
+        <button class="btn-primary" style="width:100%; padding:10px; background:#ECEFF1; color:#546E7A; font-size:0.8rem; box-shadow:none;" onclick="handleResetAppData()">🧹 앱 데이터 전체 비우기 (초기화)</button>
       </div>
     </div>
 
@@ -865,6 +866,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=3.6"></script>
+  <script src="app.js?v=3.7"></script>
 </body>
 </html>
