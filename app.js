@@ -59,28 +59,21 @@ const DEFAULT_STATE = {
     anonKey: '',
     connected: false
   },
-  attendance: {
-    // 'YYYY-MM-DD': { boyfriend: true, girlfriend: false, workoutType: '러닝 & 스쿼트' }
-  },
-  stepLogs: {
-    // 'YYYY-MM-DD': { boyfriend: 8500, girlfriend: 9200 }
-  },
+  attendance: {},
+  stepLogs: {},
   weightLogs: {
-    // { role: 'boyfriend', date: 'YYYY-MM-DD', weight: 72.5, baseline: 75.0 }
     boyfriend: [],
     girlfriend: []
   },
-  dietLogs: [
-    // { id, role, date, mealType, photoUrl, memo, createdAt }
-  ],
+  dietLogs: [],
   missions: [
     {
       id: 'm1',
       title: '이번 주 5일 걷기/러닝 달성하기 👟',
       target: 5,
       unit: '일',
-      bfProgress: 3,
-      gfProgress: 4,
+      bfProgress: 0,
+      gfProgress: 0,
       penalty: '진 사람이 주말에 달콤한 디저트 사주기 🍰'
     },
     {
@@ -88,16 +81,14 @@ const DEFAULT_STATE = {
       title: '스쿼트 총 200개 채우기 🏋️',
       target: 200,
       unit: '개',
-      bfProgress: 150,
-      gfProgress: 180,
+      bfProgress: 0,
+      gfProgress: 0,
       penalty: '진 사람이 10분 어깨 마사지해주기 💆'
     }
   ],
-  cheers: [
-    { id: 'c1', sender: 'girlfriend', senderName: '김해솔 🐰', message: '동원아 오늘도 스쿼트 끝낸 거 봤어! 최고야 멋져 💖', time: '오후 2:30' }
-  ],
+  cheers: [],
   coupons: [
-    { id: 'cp1', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: true, used: false },
+    { id: 'cp1', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
     { id: 'cp2', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
     { id: 'cp3', title: '💆 주말 전신 힐링 마사지 30분권', requiredHearts: 20, unlocked: false, used: false },
     { id: 'cp4', title: '🎬 영화관 VIP 팝콘 세트 데이트권', requiredHearts: 30, unlocked: false, used: false }
@@ -108,13 +99,12 @@ const DEFAULT_STATE = {
 class AppStore {
   constructor() {
     this.data = this.load();
-    this.ensureSampleData();
+    this.cleanSampleData();
   }
   load() {
     try {
       const saved = localStorage.getItem('couple_fit_data');
       let data = saved ? { ...DEFAULT_STATE, ...JSON.parse(saved) } : { ...DEFAULT_STATE };
-      // 항상 최신 커플 정보(이름 및 26년 6월 13일 기준일) 동기화
       data.couple = {
         ...data.couple,
         ddayDate: '2026-06-13',
@@ -133,46 +123,25 @@ class AppStore {
       console.error('Save failed:', e);
     }
   }
-  ensureSampleData() {
-    const today = getTodayStr();
-    const yesterday = getDateOffsetStr(-1);
-    const day2 = getDateOffsetStr(-2);
-
-    // 기본 출석 샘플
-    if (!this.data.attendance[today]) {
-      this.data.attendance[today] = { boyfriend: true, girlfriend: false, workoutType: '스쿼트 & 유산소' };
+  cleanSampleData() {
+    // 기존에 생성되었던 더미/샘플 데이터 제거 (초기화)
+    if (!this.data.isCleaned) {
+      this.data.attendance = {};
+      this.data.stepLogs = {};
+      this.data.weightLogs = { boyfriend: [], girlfriend: [] };
+      this.data.dietLogs = [];
+      this.data.cheers = [];
+      this.data.missions.forEach(m => { m.bfProgress = 0; m.gfProgress = 0; });
+      this.data.coupons.forEach(c => { c.unlocked = false; c.used = false; });
+      this.data.isCleaned = true;
+      this.save();
     }
-    if (!this.data.attendance[yesterday]) {
-      this.data.attendance[yesterday] = { boyfriend: true, girlfriend: true, workoutType: '헬스장 데이트' };
-    }
-    if (!this.data.attendance[day2]) {
-      this.data.attendance[day2] = { boyfriend: true, girlfriend: true, workoutType: '홈트레이닝' };
-    }
-
-    // 기본 체중 샘플
-    if (this.data.weightLogs.boyfriend.length === 0) {
-      this.data.weightLogs.boyfriend = [
-        { date: getDateOffsetStr(-14), weight: 75.0, baseline: 75.0 },
-        { date: getDateOffsetStr(-7), weight: 74.2, baseline: 75.0 },
-        { date: today, weight: 73.6, baseline: 75.0 }
-      ];
-    }
-    if (this.data.weightLogs.girlfriend.length === 0) {
-      this.data.weightLogs.girlfriend = [
-        { date: getDateOffsetStr(-14), weight: 54.0, baseline: 54.0 },
-        { date: getDateOffsetStr(-7), weight: 53.4, baseline: 54.0 },
-        { date: today, weight: 52.8, baseline: 54.0 }
-      ];
-    }
-
-    // 기본 걸음 샘플
-    if (!this.data.stepLogs[today]) {
-      this.data.stepLogs[today] = { boyfriend: 7400, girlfriend: 8200 };
-    }
-    if (!this.data.stepLogs[yesterday]) {
-      this.data.stepLogs[yesterday] = { boyfriend: 9800, girlfriend: 10400 };
-    }
-
+  }
+  resetAll() {
+    const supabaseConfig = { ...this.data.supabase };
+    this.data = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    this.data.supabase = supabaseConfig;
+    this.data.isCleaned = true;
     this.save();
   }
 }
@@ -1128,6 +1097,18 @@ async function syncAttendanceToSupabase(date, role, isCompleted) {
     }
   } catch (e) {
     console.error('Supabase attendance sync error:', e);
+  }
+}
+
+function handleResetAppData() {
+  if (confirm('기기에 저장된 모든 출석, 체중, 식단, 미션 기록을 깨끗하게 초기화할까요?')) {
+    store.resetAll();
+    renderHomeScreen();
+    if (currentTab === 'stats') renderStatsScreen();
+    if (currentTab === 'diet') renderDietScreen();
+    if (currentTab === 'missions') renderMissionsScreen();
+    alert('모든 데이터가 깨끗하게 초기화되었습니다! ✨');
+    closeModal('modal-settings');
   }
 }
 
