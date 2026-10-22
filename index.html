@@ -122,8 +122,8 @@
         <!-- 실시간 응원 한마디 보내기 (직접 입력 + 빠른 칩) -->
         <div class="card">
           <div class="card-title"><span>💌</span> 상대방에게 실시간 응원 보내기</div>
-          <div style="display:flex; gap:8px; margin-top:10px;">
-            <input type="text" id="custom-cheer-input-home" class="input-field" placeholder="직접 응원 메시지 입력 (예: 오늘도 힘내 사랑해 💖)" />
+          <div class="inline-send-bar">
+            <input type="text" id="custom-cheer-input-home" placeholder="달콤한 응원 한마디 입력 💖" />
             <button class="btn-primary" onclick="sendCustomCheerMessage('custom-cheer-input-home')">보내기</button>
           </div>
           <div class="cheer-chip-list" style="margin-top:10px;">
@@ -144,10 +144,15 @@
             <span class="card-subtitle">폰 건강앱 숫자 입력</span>
           </div>
 
-          <div class="step-input-box">
-            <input type="date" id="step-date-input" class="input-field" style="max-width: 135px; font-size: 0.82rem;" onchange="onStepDateChange()" />
-            <input type="number" id="step-input" class="input-field" placeholder="걸음 수 (예: 8500)" />
-            <button class="btn-primary" onclick="saveStepLog()">저장</button>
+          <div class="stat-entry-group">
+            <div class="stat-date-header">
+              <span class="date-pill-label">📅 기록할 날짜</span>
+              <input type="date" id="step-date-input" class="custom-date-picker" onchange="onStepDateChange()" />
+            </div>
+            <div class="stat-input-row">
+              <input type="number" id="step-input" class="input-field" placeholder="걸은 걸음 수 (예: 8500)" />
+              <button class="btn-primary" onclick="saveStepLog()">저장</button>
+            </div>
           </div>
 
           <div style="margin-top: 14px;">
@@ -186,11 +191,16 @@
             </div>
           </div>
 
-          <!-- 체중 입력 (날짜 선택 가능) -->
-          <div class="step-input-box" style="margin-top:14px;">
-            <input type="date" id="weight-date-input" class="input-field" style="max-width: 135px; font-size: 0.82rem;" onchange="onWeightDateChange()" />
-            <input type="number" step="0.1" id="weight-input" class="input-field" placeholder="체중 (kg)" />
-            <button class="btn-primary" onclick="saveWeightLog()">기록하기</button>
+          <!-- 체중 입력 (깔끔한 날짜 선택 + 입력) -->
+          <div class="stat-entry-group" style="margin-top:14px;">
+            <div class="stat-date-header">
+              <span class="date-pill-label">📅 측정 날짜</span>
+              <input type="date" id="weight-date-input" class="custom-date-picker" onchange="onWeightDateChange()" />
+            </div>
+            <div class="stat-input-row">
+              <input type="number" step="0.1" id="weight-input" class="input-field" placeholder="오늘 체중 (kg)" />
+              <button class="btn-primary" onclick="saveWeightLog()">기록하기</button>
+            </div>
           </div>
           <div style="font-size:0.72rem; color:var(--text-light); text-align:center;">
             * 체중 숫자를 비교하지 않고 순수 변화량만 응원하여 스트레스를 줄입니다.
@@ -206,10 +216,10 @@
             <span class="card-subtitle">칼로리 계산 없이 기록만!</span>
           </div>
 
-          <!-- 식단 날짜 및 식사 구분 선택 -->
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">식사 날짜:</span>
-            <input type="date" id="diet-date-input" class="input-field" style="max-width: 140px; font-size: 0.82rem; padding:6px 10px;" />
+          <!-- 식단 전용 감성 날짜 배너 -->
+          <div class="diet-date-banner">
+            <span style="font-size:0.8rem; font-weight:700; color:#D81B60;">📅 식사한 날짜</span>
+            <input type="date" id="diet-date-input" class="custom-date-picker" style="border-color:#FFCCD5; background:#FFF;" />
           </div>
 
           <div class="meal-type-chips">
@@ -238,16 +248,16 @@
           </div>
         </div>
 
-        <!-- 식단 타임라인 피드 (날짜별 필터 기능 포함) -->
+        <!-- 식단 타임라인 피드 (감성 필터 배너) -->
         <div class="card">
           <div class="card-title-row">
             <div class="card-title"><span>📸</span> 우리들의 식단 피드</div>
-            <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="clearDietDateFilter()">전체보기</button>
+            <button class="btn-primary" style="padding:4px 10px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="clearDietDateFilter()">전체보기</button>
           </div>
           
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; background:#FAF7F5; padding:8px 12px; border-radius:12px;">
-            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted);">📅 날짜로 찾아보기:</span>
-            <input type="date" id="diet-filter-date" class="input-field" style="font-size:0.8rem; padding:6px 10px; flex:1;" onchange="renderDietScreen()" />
+          <div class="diet-filter-banner">
+            <span style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">🔍 날짜별 모아보기</span>
+            <input type="date" id="diet-filter-date" class="custom-date-picker" onchange="renderDietScreen()" />
           </div>
 
           <div id="diet-timeline" style="margin-top:10px;">
@@ -292,8 +302,8 @@
         <!-- 3. 주고받은 칭찬 메시지 및 직접 입력 -->
         <div class="card">
           <div class="card-title"><span>💬</span> 실시간 응원 메시지</div>
-          <div style="display:flex; gap:8px; margin: 10px 0 12px;">
-            <input type="text" id="custom-cheer-input-mission" class="input-field" placeholder="응원 한마디 직접 남기기 💌" />
+          <div class="inline-send-bar" style="margin: 10px 0 12px;">
+            <input type="text" id="custom-cheer-input-mission" placeholder="달콤한 응원 한마디 직접 남기기 💌" />
             <button class="btn-primary" onclick="sendCustomCheerMessage('custom-cheer-input-mission')">전송</button>
           </div>
           <div id="cheer-messages-list">
