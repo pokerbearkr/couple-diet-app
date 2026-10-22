@@ -1243,22 +1243,68 @@ async function loadFromSupabase() {
   }
 }
 
+// --- 13. System Push Notifications (Web Notification API) ---
+function requestNotificationPermission() {
+  if (!('Notification' in window)) {
+    return alert('이 브라우저는 알림 기능을 지원하지 않습니다.');
+  }
+
+  Notification.requestPermission().then(permission => {
+    if (permission === 'granted') {
+      sfx.playSuccess();
+      showSystemNotification('🔔 Couple Fit 알림 활성화!', '상대방이 운동을 완료하거나 응원을 보낼 때 알림을 받습니다.');
+      const btn = document.getElementById('btn-enable-notify');
+      if (btn) btn.style.color = '#FF5E7E';
+    } else {
+      alert('알림 권한이 거부되었습니다. 기기 설정에서 알림을 허용해주세요.');
+    }
+  });
+}
+
+function showSystemNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, {
+        body: body,
+        icon: 'icon-192.png',
+        badge: 'icon-192.png'
+      });
+    } catch (e) {
+      console.log('Notification display error:', e);
+    }
+  }
+}
+
 function setupSupabaseRealtime() {
   if (!supabaseClient) return;
 
   // 실시간 출석 / 칭찬 / 식단 구독
   supabaseClient
     .channel('couple_realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
       loadFromSupabase();
       sfx.playSuccess();
+      const currentRole = store.data.currentRole;
+      if (payload.new && payload.new.user_role !== currentRole) {
+        const partnerName = currentRole === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
+        showSystemNotification('🎉 파트너 운동 완료!', `${partnerName}님이 오늘 운동 출석 도장을 찍었어요! 💖`);
+      }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'cheers' }, (payload) => {
       loadFromSupabase();
       createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+      const currentRole = store.data.currentRole;
+      if (payload.new && payload.new.sender_role !== currentRole) {
+        showSystemNotification(`💌 ${payload.new.sender_name}의 응원 도착!`, payload.new.message);
+      }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'diet_logs' }, () => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'diet_logs' }, (payload) => {
       loadFromSupabase();
+      const currentRole = store.data.currentRole;
+      if (payload.new && payload.new.user_role !== currentRole) {
+        const partnerName = currentRole === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
+        showSystemNotification('🥗 새 식단 일기 등록!', `${partnerName}님이 맛있는 식단 사진을 올렸어요.`);
+      }
     })
     .subscribe();
 }
