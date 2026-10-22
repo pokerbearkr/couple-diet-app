@@ -1290,7 +1290,41 @@ async function loadFromSupabase() {
       });
     }
 
-    // 2. 칭찬 불러오기
+    // 2. 걸음 수 불러오기
+    const { data: stepList } = await supabaseClient.from('step_logs').select('*');
+    if (stepList && stepList.length > 0) {
+      stepList.forEach(s => {
+        if (!store.data.stepLogs[s.date]) store.data.stepLogs[s.date] = { boyfriend: 0, girlfriend: 0 };
+        store.data.stepLogs[s.date][s.user_role] = s.step_count;
+      });
+    }
+
+    // 3. 체중 기록 불러오기
+    const { data: weightList } = await supabaseClient.from('weight_logs').select('*').order('date', { ascending: true });
+    if (weightList && weightList.length > 0) {
+      store.data.weightLogs.boyfriend = weightList
+        .filter(w => w.user_role === 'boyfriend')
+        .map(w => ({ date: w.date, weight: Number(w.weight_kg), baseline: Number(w.baseline_weight) }));
+      store.data.weightLogs.girlfriend = weightList
+        .filter(w => w.user_role === 'girlfriend')
+        .map(w => ({ date: w.date, weight: Number(w.weight_kg), baseline: Number(w.baseline_weight) }));
+    }
+
+    // 4. 식단 불러오기
+    const { data: dietList } = await supabaseClient.from('diet_logs').select('*').order('created_at', { ascending: true });
+    if (dietList && dietList.length > 0) {
+      store.data.dietLogs = dietList.map(d => ({
+        id: d.id,
+        role: d.user_role,
+        date: d.date,
+        mealType: d.meal_type,
+        photoUrl: d.photo_url,
+        memo: d.memo,
+        createdAt: d.created_at
+      }));
+    }
+
+    // 5. 칭찬 불러오기
     const { data: cheerList } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
     if (cheerList && cheerList.length > 0) {
       store.data.cheers = cheerList.map(c => ({
@@ -1302,17 +1336,29 @@ async function loadFromSupabase() {
       }));
     }
 
-    // 3. 식단 불러오기
-    const { data: dietList } = await supabaseClient.from('diet_logs').select('*').order('created_at', { ascending: true });
-    if (dietList && dietList.length > 0) {
-      store.data.dietLogs = dietList.map(d => ({
-        id: d.id,
-        role: d.user_role,
-        date: d.date,
-        mealType: d.meal_type,
-        photoUrl: d.photo_url,
-        memo: d.memo,
-        createdAt: d.created_at
+    // 6. 미션 불러오기
+    const { data: missionList } = await supabaseClient.from('missions').select('*');
+    if (missionList && missionList.length > 0) {
+      store.data.missions = missionList.map(m => ({
+        id: m.id,
+        title: m.title,
+        target: m.target_count,
+        unit: m.unit || '회',
+        bfProgress: m.user1_progress || 0,
+        gfProgress: m.user2_progress || 0,
+        penalty: m.penalty_reward
+      }));
+    }
+
+    // 7. 보상 쿠폰 불러오기
+    const { data: couponList } = await supabaseClient.from('reward_box').select('*');
+    if (couponList && couponList.length > 0) {
+      store.data.coupons = couponList.map(c => ({
+        id: c.id,
+        title: c.title,
+        requiredHearts: c.required_hearts,
+        unlocked: c.is_unlocked,
+        used: c.is_used
       }));
     }
 
