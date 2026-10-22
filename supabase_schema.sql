@@ -100,6 +100,21 @@ CREATE TABLE IF NOT EXISTS public.reward_box (
     required_hearts INT NOT NULL,
     is_unlocked BOOLEAN DEFAULT false,
     is_used BOOLEAN DEFAULT false,
+    used_at DATE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 10. 커플 벌칙 수행 및 관리 테이블
+CREATE TABLE IF NOT EXISTS public.penalties (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    couple_id UUID REFERENCES public.couples(id) ON DELETE SET NULL,
+    title VARCHAR(150) NOT NULL,
+    loser_role VARCHAR(20) NOT NULL,
+    loser_name VARCHAR(50) NOT NULL,
+    target_name VARCHAR(50) NOT NULL,
+    from_mission VARCHAR(100),
+    is_completed BOOLEAN DEFAULT false,
+    completed_at DATE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -115,6 +130,18 @@ ALTER TABLE public.diet_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.missions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cheers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reward_box ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.penalties ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all access to couples" ON public.couples;
+DROP POLICY IF EXISTS "Allow all access to profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow all access to attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Allow all access to step_logs" ON public.step_logs;
+DROP POLICY IF EXISTS "Allow all access to weight_logs" ON public.weight_logs;
+DROP POLICY IF EXISTS "Allow all access to diet_logs" ON public.diet_logs;
+DROP POLICY IF EXISTS "Allow all access to missions" ON public.missions;
+DROP POLICY IF EXISTS "Allow all access to cheers" ON public.cheers;
+DROP POLICY IF EXISTS "Allow all access to reward_box" ON public.reward_box;
+DROP POLICY IF EXISTS "Allow all access to penalties" ON public.penalties;
 
 CREATE POLICY "Allow all access to couples" ON public.couples FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
@@ -125,8 +152,14 @@ CREATE POLICY "Allow all access to diet_logs" ON public.diet_logs FOR ALL USING 
 CREATE POLICY "Allow all access to missions" ON public.missions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to cheers" ON public.cheers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to reward_box" ON public.reward_box FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to penalties" ON public.penalties FOR ALL USING (true) WITH CHECK (true);
 
 -- 실시간 (Realtime) 동기화 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE public.attendance;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cheers;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.step_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.diet_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.cheers;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.missions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.reward_box;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.penalties;

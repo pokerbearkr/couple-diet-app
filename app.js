@@ -690,10 +690,13 @@ function saveStepLog() {
   if (isNaN(val) || val < 0) return alert('올바른 걸음 수를 입력해주세요!');
 
   const targetDate = selectedStepDate || getTodayStr();
+  const role = store.data.currentRole;
 
   if (!store.data.stepLogs[targetDate]) store.data.stepLogs[targetDate] = { boyfriend: 0, girlfriend: 0 };
-  store.data.stepLogs[targetDate][store.data.currentRole] = val;
+  store.data.stepLogs[targetDate][role] = val;
   store.save();
+
+  syncStepToSupabase(targetDate, role, val);
 
   sfx.playSuccess();
   alert(`${formatDatePretty(targetDate)} 걸음 수가 저장되었습니다! 👟`);
@@ -721,6 +724,8 @@ function saveWeightLog() {
   }
 
   store.save();
+  syncWeightToSupabase(targetDate, role, val, baseline);
+
   sfx.playSuccess();
   document.getElementById('weight-input').value = '';
   alert(`${formatDatePretty(targetDate)} 비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒`);
@@ -899,6 +904,7 @@ function saveDietLog() {
 
   store.data.dietLogs.push(newLog);
   store.save();
+  syncDietToSupabase(newLog);
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 16);
@@ -1220,6 +1226,9 @@ function confirmSettleWinner(winnerRole) {
   m.gfProgress = 0;
   store.save();
 
+  syncPenaltyToSupabase(newPenalty);
+  syncMissionProgressToSupabase(m);
+
   closeModal('modal-mission-settle');
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
@@ -1297,6 +1306,9 @@ function savePenaltyData() {
   }
 
   store.save();
+  const targetP = editId ? store.data.penalties.find(item => item.id === editId) : store.data.penalties[0];
+  if (targetP) syncPenaltyToSupabase(targetP);
+
   sfx.playSuccess();
   closeModal('modal-penalty-edit');
   renderMissionsScreen();
@@ -1306,6 +1318,7 @@ function deletePenalty(penaltyId) {
   if (confirm('이 벌칙을 삭제하시겠습니까?')) {
     store.data.penalties = store.data.penalties.filter(item => item.id !== penaltyId);
     store.save();
+    deletePenaltyFromSupabase(penaltyId);
     renderMissionsScreen();
   }
 }
@@ -1317,6 +1330,7 @@ function togglePenaltyComplete(penaltyId, markAsCompleted) {
   p.completed = markAsCompleted;
   p.completedAt = markAsCompleted ? getTodayStr() : null;
   store.save();
+  syncPenaltyToSupabase(p);
 
   if (markAsCompleted) {
     sfx.playSuccess();
@@ -1384,6 +1398,9 @@ function saveMissionData() {
   }
 
   store.save();
+  const targetM = editId ? store.data.missions.find(item => item.id === editId) : store.data.missions[store.data.missions.length - 1];
+  if (targetM) syncMissionToSupabase(targetM);
+
   sfx.playSuccess();
   closeModal('modal-mission-edit');
   renderMissionsScreen();
@@ -1393,6 +1410,7 @@ function deleteMission(missionId) {
   if (confirm('이 주간 미션을 삭제하시겠습니까?')) {
     store.data.missions = store.data.missions.filter(item => item.id !== missionId);
     store.save();
+    deleteMissionFromSupabase(missionId);
     renderMissionsScreen();
   }
 }
@@ -1409,6 +1427,8 @@ function incrementMission(missionId, amount = 1) {
   }
 
   store.save();
+  syncMissionProgressToSupabase(m);
+
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 10);
   renderMissionsScreen();
@@ -1448,14 +1468,16 @@ function sendCheerMessage(msgText) {
   const now = new Date();
   const timeStr = `${now.getHours() >= 12 ? '오후' : '오전'} ${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  store.data.cheers.push({
+  const newCheer = {
     id: 'c_' + Date.now(),
     sender: role,
     senderName,
     message: msgText,
     time: timeStr
-  });
+  };
+  store.data.cheers.push(newCheer);
   store.save();
+  syncCheerToSupabase(newCheer);
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
@@ -1589,6 +1611,9 @@ function saveCouponData() {
   }
 
   store.save();
+  const targetCp = editId ? store.data.coupons.find(item => item.id === editId) : store.data.coupons[store.data.coupons.length - 1];
+  if (targetCp) syncCouponToSupabase(targetCp);
+
   sfx.playSuccess();
   closeModal('modal-coupon-edit');
   renderMissionsScreen();
@@ -1598,6 +1623,7 @@ function deleteCoupon(couponId) {
   if (confirm('이 보상 쿠폰을 삭제하시겠습니까?')) {
     store.data.coupons = store.data.coupons.filter(item => item.id !== couponId);
     store.save();
+    deleteCouponFromSupabase(couponId);
     renderMissionsScreen();
   }
 }
@@ -1610,6 +1636,7 @@ function useCoupon(couponId) {
     cp.used = true;
     cp.usedAt = getTodayStr();
     store.save();
+    syncCouponUsageToSupabase(cp);
     sfx.playSuccess();
     createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
     renderMissionsScreen();
@@ -1624,6 +1651,7 @@ function restoreCoupon(couponId) {
     cp.used = false;
     delete cp.usedAt;
     store.save();
+    syncCouponUsageToSupabase(cp);
     renderMissionsScreen();
   }
 }
@@ -1912,7 +1940,24 @@ async function loadFromSupabase() {
         title: c.title,
         requiredHearts: c.required_hearts,
         unlocked: c.is_unlocked,
-        used: c.is_used
+        used: c.is_used,
+        usedAt: c.used_at
+      }));
+    }
+
+    // 8. 벌칙 목록 불러오기
+    const { data: penaltyList } = await supabaseClient.from('penalties').select('*').order('created_at', { ascending: false });
+    if (penaltyList && penaltyList.length > 0) {
+      store.data.penalties = penaltyList.map(p => ({
+        id: p.id,
+        title: p.title,
+        loser: p.loser_role,
+        loserName: p.loser_name,
+        targetName: p.target_name,
+        fromMission: p.from_mission,
+        completed: p.is_completed,
+        completedAt: p.completed_at,
+        createdAt: p.created_at ? p.created_at.slice(0, 10) : getTodayStr()
       }));
     }
 
@@ -1961,9 +2006,9 @@ function showSystemNotification(title, body) {
 function setupSupabaseRealtime() {
   if (!supabaseClient) return;
 
-  // 실시간 출석 / 칭찬 / 식단 구독
+  // 모든 핵심 테이블 실시간 구독
   supabaseClient
-    .channel('couple_realtime')
+    .channel('couple_realtime_all')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
       loadFromSupabase();
       sfx.playSuccess();
@@ -1971,6 +2016,20 @@ function setupSupabaseRealtime() {
       if (payload.new && payload.new.user_role !== currentRole) {
         const partnerName = currentRole === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
         showSystemNotification('🎉 파트너 운동 완료!', `${partnerName}님이 오늘 운동 출석 도장을 찍었어요! 💖`);
+      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'step_logs' }, () => {
+      loadFromSupabase();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'weight_logs' }, () => {
+      loadFromSupabase();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'diet_logs' }, (payload) => {
+      loadFromSupabase();
+      const currentRole = store.data.currentRole;
+      if (payload.new && payload.new.user_role !== currentRole) {
+        const partnerName = currentRole === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
+        showSystemNotification('🥗 새 식단 일기 등록!', `${partnerName}님이 맛있는 식단 사진을 올렸어요.`);
       }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'cheers' }, (payload) => {
@@ -1981,17 +2040,19 @@ function setupSupabaseRealtime() {
         showSystemNotification(`💌 ${payload.new.sender_name}의 응원 도착!`, payload.new.message);
       }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'diet_logs' }, (payload) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'missions' }, () => {
       loadFromSupabase();
-      const currentRole = store.data.currentRole;
-      if (payload.new && payload.new.user_role !== currentRole) {
-        const partnerName = currentRole === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
-        showSystemNotification('🥗 새 식단 일기 등록!', `${partnerName}님이 맛있는 식단 사진을 올렸어요.`);
-      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'reward_box' }, () => {
+      loadFromSupabase();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'penalties' }, () => {
+      loadFromSupabase();
     })
     .subscribe();
 }
 
+// --- Supabase 개별 동기화 헬퍼 함수들 ---
 async function syncAttendanceToSupabase(date, role, isCompleted) {
   if (!supabaseClient) return;
   try {
@@ -2000,12 +2061,190 @@ async function syncAttendanceToSupabase(date, role, isCompleted) {
         user_role: role,
         date: date,
         workout_type: '일반 운동'
-      });
+      }, { onConflict: 'user_role,date' });
     } else {
       await supabaseClient.from('attendance').delete().match({ date: date, user_role: role });
     }
   } catch (e) {
     console.error('Supabase attendance sync error:', e);
+  }
+}
+
+async function syncStepToSupabase(date, role, stepCount) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('step_logs').upsert({
+      user_role: role,
+      date: date,
+      step_count: stepCount
+    }, { onConflict: 'user_role,date' });
+  } catch (e) {
+    console.error('Supabase step sync error:', e);
+  }
+}
+
+async function syncWeightToSupabase(date, role, weightKg, baselineWeight) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('weight_logs').upsert({
+      user_role: role,
+      date: date,
+      weight_kg: weightKg,
+      baseline_weight: baselineWeight
+    }, { onConflict: 'user_role,date' });
+  } catch (e) {
+    console.error('Supabase weight sync error:', e);
+  }
+}
+
+async function syncDietToSupabase(newDiet) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('diet_logs').insert({
+      user_role: newDiet.role,
+      date: newDiet.date,
+      meal_type: newDiet.mealType,
+      photo_url: newDiet.photoUrl,
+      memo: newDiet.memo
+    });
+  } catch (e) {
+    console.error('Supabase diet sync error:', e);
+  }
+}
+
+async function syncCheerToSupabase(newCheer) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('cheers').insert({
+      sender_role: newCheer.sender,
+      sender_name: newCheer.senderName,
+      message: newCheer.message
+    });
+  } catch (e) {
+    console.error('Supabase cheer sync error:', e);
+  }
+}
+
+async function syncMissionToSupabase(m) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id);
+    const row = {
+      title: m.title,
+      target_count: m.target,
+      unit: m.unit,
+      user1_progress: m.bfProgress,
+      user2_progress: m.gfProgress,
+      penalty_reward: m.penalty
+    };
+    if (isNumericId) row.id = m.id;
+    await supabaseClient.from('missions').upsert(row);
+  } catch (e) {
+    console.error('Supabase mission sync error:', e);
+  }
+}
+
+async function syncMissionProgressToSupabase(m) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id);
+    if (isNumericId) {
+      await supabaseClient.from('missions').update({
+        user1_progress: m.bfProgress,
+        user2_progress: m.gfProgress
+      }).eq('id', m.id);
+    }
+  } catch (e) {
+    console.error('Supabase mission progress sync error:', e);
+  }
+}
+
+async function deleteMissionFromSupabase(missionId) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(missionId);
+    if (isNumericId) {
+      await supabaseClient.from('missions').delete().eq('id', missionId);
+    }
+  } catch (e) {
+    console.error('Supabase mission delete error:', e);
+  }
+}
+
+async function syncCouponToSupabase(cp) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cp.id);
+    const row = {
+      title: cp.title,
+      required_hearts: cp.requiredHearts,
+      is_unlocked: cp.unlocked,
+      is_used: cp.used,
+      used_at: cp.usedAt || null
+    };
+    if (isNumericId) row.id = cp.id;
+    await supabaseClient.from('reward_box').upsert(row);
+  } catch (e) {
+    console.error('Supabase coupon sync error:', e);
+  }
+}
+
+async function syncCouponUsageToSupabase(cp) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cp.id);
+    if (isNumericId) {
+      await supabaseClient.from('reward_box').update({
+        is_used: cp.used,
+        used_at: cp.usedAt || null
+      }).eq('id', cp.id);
+    }
+  } catch (e) {
+    console.error('Supabase coupon usage sync error:', e);
+  }
+}
+
+async function deleteCouponFromSupabase(couponId) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(couponId);
+    if (isNumericId) {
+      await supabaseClient.from('reward_box').delete().eq('id', couponId);
+    }
+  } catch (e) {
+    console.error('Supabase coupon delete error:', e);
+  }
+}
+
+async function syncPenaltyToSupabase(p) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
+    const row = {
+      title: p.title,
+      loser_role: p.loser,
+      loser_name: p.loserName,
+      target_name: p.targetName,
+      from_mission: p.fromMission || '',
+      is_completed: p.completed,
+      completed_at: p.completedAt || null
+    };
+    if (isNumericId) row.id = p.id;
+    await supabaseClient.from('penalties').upsert(row);
+  } catch (e) {
+    console.error('Supabase penalty sync error:', e);
+  }
+}
+
+async function deletePenaltyFromSupabase(penaltyId) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(penaltyId);
+    if (isNumericId) {
+      await supabaseClient.from('penalties').delete().eq('id', penaltyId);
+    }
+  } catch (e) {
+    console.error('Supabase penalty delete error:', e);
   }
 }
 
