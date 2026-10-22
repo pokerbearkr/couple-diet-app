@@ -118,10 +118,14 @@
           </div>
         </div>
 
-        <!-- 빠른 칭찬 한마디 보내기 -->
+        <!-- 실시간 응원 한마디 보내기 (직접 입력 + 빠른 칩) -->
         <div class="card">
           <div class="card-title"><span>💌</span> 상대방에게 실시간 응원 보내기</div>
-          <div class="cheer-chip-list">
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <input type="text" id="custom-cheer-input-home" class="input-field" placeholder="직접 응원 메시지 입력 (예: 오늘도 힘내 사랑해 💖)" />
+            <button class="btn-primary" onclick="sendCustomCheerMessage('custom-cheer-input-home')">보내기</button>
+          </div>
+          <div class="cheer-chip-list" style="margin-top:10px;">
             <button class="cheer-chip" onclick="sendCheerMessage('오늘도 운동 화이팅! 최고야 🥰')">오늘도 화이팅 🥰</button>
             <button class="cheer-chip" onclick="sendCheerMessage('꾸준한 모습 너무 멋져 사랑해 💖')">너무 멋져 사랑해 💖</button>
             <button class="cheer-chip" onclick="sendCheerMessage('무리하지 말고 물 꼭 챙겨 마셔 💧')">물 챙겨 마셔 💧</button>
@@ -240,8 +244,11 @@
         <!-- 1. 주간 미션 대결 -->
         <div class="card">
           <div class="card-title-row">
-            <div class="card-title"><span>⚔️</span> 주간 미션 대결</div>
-            <span class="card-subtitle">선의의 경쟁 & 귀여운 벌칙</span>
+            <div>
+              <div class="card-title"><span>⚔️</span> 주간 미션 대결</div>
+              <span class="card-subtitle">선의의 경쟁 & 귀여운 벌칙</span>
+            </div>
+            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem;" onclick="openCreateMissionModal()">+ 미션 만들기</button>
           </div>
           <div id="missions-list">
             <!-- JS 동적 렌더링 -->
@@ -251,8 +258,11 @@
         <!-- 2. 보상 상자 (데이트 쿠폰) -->
         <div class="card">
           <div class="card-title-row">
-            <div class="card-title"><span>🎁</span> 커플 보상 상자</div>
-            <span id="total-heart-count" style="font-size:0.78rem; font-weight:800; color:var(--accent-heart);">💖 0개</span>
+            <div>
+              <div class="card-title"><span>🎁</span> 커플 보상 상자</div>
+              <span id="total-heart-count" style="font-size:0.78rem; font-weight:800; color:var(--accent-heart);">💖 0개</span>
+            </div>
+            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem; background:linear-gradient(135deg, #FFB74D, #FF9800);" onclick="openCreateCouponModal()">+ 쿠폰 만들기</button>
           </div>
           <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
             둘 다 운동을 완료하여 모은 하트로 특별한 데이트 쿠폰을 여세요!
@@ -262,10 +272,14 @@
           </div>
         </div>
 
-        <!-- 3. 주고받은 칭찬 메시지 -->
+        <!-- 3. 주고받은 칭찬 메시지 및 직접 입력 -->
         <div class="card">
-          <div class="card-title"><span>💬</span> 최근 주고받은 응원 한마디</div>
-          <div id="cheer-messages-list" style="margin-top:10px;">
+          <div class="card-title"><span>💬</span> 실시간 응원 메시지</div>
+          <div style="display:flex; gap:8px; margin: 10px 0 12px;">
+            <input type="text" id="custom-cheer-input-mission" class="input-field" placeholder="응원 한마디 직접 남기기 💌" />
+            <button class="btn-primary" onclick="sendCustomCheerMessage('custom-cheer-input-mission')">전송</button>
+          </div>
+          <div id="cheer-messages-list">
             <!-- JS 동적 렌더링 -->
           </div>
         </div>
@@ -358,6 +372,66 @@
 
         <button class="btn-primary" style="width:100%; padding:14px; margin-bottom:10px;" onclick="saveSupabaseSettings()">설정 저장하기</button>
         <button class="btn-primary" style="width:100%; padding:10px; background:#ECEFF1; color:#546E7A; font-size:0.8rem; box-shadow:none;" onclick="handleResetAppData()">🧹 로컬 데이터 전체 비우기 (초기화)</button>
+      </div>
+    </div>
+
+    <!-- 모달: 주간 미션 생성/수정 -->
+    <div id="modal-mission-edit" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 id="modal-mission-title-text" style="font-size:1.1rem; color:var(--text-main);">⚔️ 주간 미션 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-mission-edit')" style="border:none;">✕</button>
+        </div>
+
+        <input type="hidden" id="mission-edit-id" value="" />
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">미션 제목</label>
+          <input type="text" id="mission-title-input" class="input-field" placeholder="예: 이번 주 5일 러닝하기 👟" style="width:100%;" />
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <div style="flex:1;">
+            <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">목표 수치</label>
+            <input type="number" id="mission-target-input" class="input-field" placeholder="5" value="5" style="width:100%;" />
+          </div>
+          <div style="width:100px;">
+            <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">단위</label>
+            <input type="text" id="mission-unit-input" class="input-field" placeholder="일 / 회 / 분" value="일" style="width:100%;" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">패자 벌칙 / 보상</label>
+          <input type="text" id="mission-penalty-input" class="input-field" placeholder="예: 진 사람이 주말에 디저트 사기 🍰" style="width:100%;" />
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:14px;" onclick="saveMissionData()">미션 저장하기</button>
+      </div>
+    </div>
+
+    <!-- 모달: 커플 보상 쿠폰 생성/수정 -->
+    <div id="modal-coupon-edit" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 id="modal-coupon-title-text" style="font-size:1.1rem; color:var(--text-main);">🎁 커플 보상 쿠폰 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-coupon-edit')" style="border:none;">✕</button>
+        </div>
+
+        <input type="hidden" id="coupon-edit-id" value="" />
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">쿠폰 이름</label>
+          <input type="text" id="coupon-title-input" class="input-field" placeholder="예: ☕ 스타벅스 커피 & 디저트 데이트권" style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">필요 커플 하트 개수</label>
+          <input type="number" id="coupon-hearts-input" class="input-field" placeholder="예: 10" value="10" style="width:100%;" />
+          <div style="font-size:0.7rem; color:var(--text-light); margin-top:2px;">* 둘 다 운동을 완료한 날마다 하트가 1개씩 적립됩니다.</div>
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:14px;" onclick="saveCouponData()">쿠폰 저장하기</button>
       </div>
     </div>
 

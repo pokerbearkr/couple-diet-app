@@ -660,56 +660,151 @@ function renderMissionsScreen() {
   const missionContainer = document.getElementById('missions-list');
   if (missionContainer) {
     missionContainer.innerHTML = '';
-    store.data.missions.forEach((m, idx) => {
-      const card = document.createElement('div');
-      card.className = 'mission-card';
-
-      const bfPct = Math.min((m.bfProgress / m.target) * 100, 100);
-      const gfPct = Math.min((m.gfProgress / m.target) * 100, 100);
-
-      card.innerHTML = `
-        <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</div>
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit}</div>
-        
-        <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; margin-top:10px;">
-          <span style="color:#1976D2;">🏃‍♂️ 오동원: ${m.bfProgress}/${m.target}${m.unit}</span>
-          <span style="color:#D81B60;">🐰 김해솔: ${m.gfProgress}/${m.target}${m.unit}</span>
-        </div>
-        
-        <div class="mission-progress-bar-bg">
-          <div class="mission-bar-bf" style="width: ${bfPct / 2}%;"></div>
-          <div class="mission-bar-gf" style="width: ${gfPct / 2}%;"></div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-          <span class="penalty-tag">벌칙: ${m.penalty}</span>
-          <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem;" onclick="incrementMission('${m.id}')">+1 달성</button>
+    if (store.data.missions.length === 0) {
+      missionContainer.innerHTML = `
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+          ⚔️ 아직 등록된 주간 미션이 없어요.<br>우측 상단 <b>'+ 미션 만들기'</b>로 둘만의 대결을 시작해보세요!
         </div>
       `;
-      missionContainer.appendChild(card);
-    });
+    } else {
+      store.data.missions.forEach((m) => {
+        const card = document.createElement('div');
+        card.className = 'mission-card';
+
+        const bfPct = Math.min((m.bfProgress / m.target) * 100, 100);
+        const gfPct = Math.min((m.gfProgress / m.target) * 100, 100);
+
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit}</div>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditMissionModal('${m.id}')" title="수정">✏️</button>
+              <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deleteMission('${m.id}')" title="삭제">🗑️</button>
+            </div>
+          </div>
+          
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; margin-top:10px;">
+            <span style="color:#1976D2;">🏃‍♂️ 오동원: ${m.bfProgress}/${m.target}${m.unit}</span>
+            <span style="color:#D81B60;">🐰 김해솔: ${m.gfProgress}/${m.target}${m.unit}</span>
+          </div>
+          
+          <div class="mission-progress-bar-bg">
+            <div class="mission-bar-bf" style="width: ${bfPct / 2}%;"></div>
+            <div class="mission-bar-gf" style="width: ${gfPct / 2}%;"></div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+            <span class="penalty-tag">벌칙: ${m.penalty}</span>
+            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem;" onclick="incrementMission('${m.id}')">+1 달성</button>
+          </div>
+        `;
+        missionContainer.appendChild(card);
+      });
+    }
   }
 
   // 2. 칭찬 피드
   const cheerContainer = document.getElementById('cheer-messages-list');
   if (cheerContainer) {
     cheerContainer.innerHTML = '';
-    store.data.cheers.slice(-5).reverse().forEach(c => {
-      const msgBox = document.createElement('div');
-      msgBox.className = 'cheer-msg-card';
-      msgBox.innerHTML = `
-        <div>
-          <span style="font-weight:700; color:${c.sender === 'boyfriend' ? '#1976D2' : '#D81B60'};">${c.senderName}</span>: 
-          <span>${c.message}</span>
+    if (store.data.cheers.length === 0) {
+      cheerContainer.innerHTML = `
+        <div style="text-align:center; padding:16px 10px; color:var(--text-muted); font-size:0.82rem;">
+          💌 아직 주고받은 응원 메시지가 없어요.<br>위 입력창에 달콤한 응원 한마디를 남겨보세요!
         </div>
-        <span style="font-size:0.7rem; color:var(--text-light);">${c.time}</span>
       `;
-      cheerContainer.appendChild(msgBox);
-    });
+    } else {
+      store.data.cheers.slice(-5).reverse().forEach(c => {
+        const msgBox = document.createElement('div');
+        msgBox.className = 'cheer-msg-card';
+        msgBox.innerHTML = `
+          <div>
+            <span style="font-weight:700; color:${c.sender === 'boyfriend' ? '#1976D2' : '#D81B60'};">${c.senderName}</span>:
+            <span>${c.message}</span>
+          </div>
+          <span style="font-size:0.7rem; color:var(--text-light);">${c.time}</span>
+        `;
+        cheerContainer.appendChild(msgBox);
+      });
+    }
   }
 
   // 3. 보상 상자 (하트 누적 쿠폰)
   renderCouponList();
+}
+
+// --- 주간 미션 생성/수정/삭제 로직 ---
+function openCreateMissionModal() {
+  document.getElementById('modal-mission-title-text').innerText = '⚔️ 새 주간 미션 만들기';
+  document.getElementById('mission-edit-id').value = '';
+  document.getElementById('mission-title-input').value = '';
+  document.getElementById('mission-target-input').value = '5';
+  document.getElementById('mission-unit-input').value = '일';
+  document.getElementById('mission-penalty-input').value = '진 사람이 주말에 디저트 사기 🍰';
+  openModal('modal-mission-edit');
+}
+
+function openEditMissionModal(missionId) {
+  const m = store.data.missions.find(item => item.id === missionId);
+  if (!m) return;
+
+  document.getElementById('modal-mission-title-text').innerText = '⚔️ 주간 미션 수정';
+  document.getElementById('mission-edit-id').value = m.id;
+  document.getElementById('mission-title-input').value = m.title;
+  document.getElementById('mission-target-input').value = m.target;
+  document.getElementById('mission-unit-input').value = m.unit;
+  document.getElementById('mission-penalty-input').value = m.penalty;
+  openModal('modal-mission-edit');
+}
+
+function saveMissionData() {
+  const editId = document.getElementById('mission-edit-id').value;
+  const title = document.getElementById('mission-title-input').value.trim();
+  const target = parseInt(document.getElementById('mission-target-input').value, 10);
+  const unit = document.getElementById('mission-unit-input').value.trim() || '회';
+  const penalty = document.getElementById('mission-penalty-input').value.trim() || '진 사람이 맛있는 거 사주기 😋';
+
+  if (!title) return alert('미션 제목을 입력해주세요!');
+  if (isNaN(target) || target <= 0) return alert('올바른 목표 수치를 입력해주세요!');
+
+  if (editId) {
+    // 수정
+    const m = store.data.missions.find(item => item.id === editId);
+    if (m) {
+      m.title = title;
+      m.target = target;
+      m.unit = unit;
+      m.penalty = penalty;
+    }
+  } else {
+    // 신규 생성
+    const newMission = {
+      id: 'm_' + Date.now(),
+      title,
+      target,
+      unit,
+      bfProgress: 0,
+      gfProgress: 0,
+      penalty
+    };
+    store.data.missions.push(newMission);
+  }
+
+  store.save();
+  sfx.playSuccess();
+  closeModal('modal-mission-edit');
+  renderMissionsScreen();
+}
+
+function deleteMission(missionId) {
+  if (confirm('이 주간 미션을 삭제하시겠습니까?')) {
+    store.data.missions = store.data.missions.filter(item => item.id !== missionId);
+    store.save();
+    renderMissionsScreen();
+  }
 }
 
 function incrementMission(missionId) {
@@ -723,6 +818,17 @@ function incrementMission(missionId) {
   store.save();
   sfx.playSuccess();
   renderMissionsScreen();
+}
+
+// --- 응원 메시지 직접 입력 및 프리셋 전송 ---
+function sendCustomCheerMessage(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return alert('응원할 메시지를 입력해주세요! 🥰');
+
+  sendCheerMessage(text);
+  input.value = '';
 }
 
 function sendCheerMessage(msgText) {
@@ -764,6 +870,7 @@ function checkRewardBoxUnlocks() {
   store.save();
 }
 
+// --- 커플 보상 쿠폰 생성/수정/삭제 로직 ---
 function renderCouponList() {
   const container = document.getElementById('coupons-list');
   if (!container) return;
@@ -773,22 +880,37 @@ function renderCouponList() {
   const heartCountEl = document.getElementById('total-heart-count');
   if (heartCountEl) heartCountEl.innerText = `현재 모은 커플 하트: 💖 ${totalHearts}개`;
 
+  if (store.data.coupons.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
+        🎁 아직 등록된 데이트 쿠폰이 없어요.<br>우측 상단 <b>'+ 쿠폰 만들기'</b>로 목표 보상을 걸어보세요!
+      </div>
+    `;
+    return;
+  }
+
   store.data.coupons.forEach(cp => {
     const isReady = totalHearts >= cp.requiredHearts;
     const card = document.createElement('div');
     card.className = `coupon-card ${!isReady ? 'locked' : ''}`;
 
     card.innerHTML = `
-      <div>
-        <div style="font-size:0.92rem; font-weight:800; color:var(--text-main);">${cp.title}</div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:0.92rem; font-weight:800; color:var(--text-main);">${cp.title}</div>
+          <div style="display:flex; gap:2px; margin-right:8px;">
+            <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="openEditCouponModal('${cp.id}')" title="수정">✏️</button>
+            <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="deleteCoupon('${cp.id}')" title="삭제">🗑️</button>
+          </div>
+        </div>
         <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
           필요 하트: 💖 ${cp.requiredHearts}개 (${isReady ? '잠금 해제 완료!' : `앞으로 ${cp.requiredHearts - totalHearts}개 남음`})
         </div>
       </div>
       <div>
-        ${cp.used 
+        ${cp.used
           ? `<button class="coupon-btn used">사용 완료</button>`
-          : isReady 
+          : isReady
             ? `<button class="coupon-btn" onclick="useCoupon('${cp.id}')">사용하기 🎁</button>`
             : `<button class="coupon-btn locked" style="background:#B0BEC5; cursor:not-allowed;">🔒 잠김</button>`
         }
@@ -796,6 +918,64 @@ function renderCouponList() {
     `;
     container.appendChild(card);
   });
+}
+
+function openCreateCouponModal() {
+  document.getElementById('modal-coupon-title-text').innerText = '🎁 새 보상 쿠폰 만들기';
+  document.getElementById('coupon-edit-id').value = '';
+  document.getElementById('coupon-title-input').value = '';
+  document.getElementById('coupon-hearts-input').value = '10';
+  openModal('modal-coupon-edit');
+}
+
+function openEditCouponModal(couponId) {
+  const cp = store.data.coupons.find(item => item.id === couponId);
+  if (!cp) return;
+
+  document.getElementById('modal-coupon-title-text').innerText = '🎁 보상 쿠폰 수정';
+  document.getElementById('coupon-edit-id').value = cp.id;
+  document.getElementById('coupon-title-input').value = cp.title;
+  document.getElementById('coupon-hearts-input').value = cp.requiredHearts;
+  openModal('modal-coupon-edit');
+}
+
+function saveCouponData() {
+  const editId = document.getElementById('coupon-edit-id').value;
+  const title = document.getElementById('coupon-title-input').value.trim();
+  const requiredHearts = parseInt(document.getElementById('coupon-hearts-input').value, 10);
+
+  if (!title) return alert('쿠폰 이름을 입력해주세요!');
+  if (isNaN(requiredHearts) || requiredHearts <= 0) return alert('올바른 필요 하트 개수를 입력해주세요!');
+
+  if (editId) {
+    const cp = store.data.coupons.find(item => item.id === editId);
+    if (cp) {
+      cp.title = title;
+      cp.requiredHearts = requiredHearts;
+    }
+  } else {
+    const newCoupon = {
+      id: 'cp_' + Date.now(),
+      title,
+      requiredHearts,
+      unlocked: false,
+      used: false
+    };
+    store.data.coupons.push(newCoupon);
+  }
+
+  store.save();
+  sfx.playSuccess();
+  closeModal('modal-coupon-edit');
+  renderMissionsScreen();
+}
+
+function deleteCoupon(couponId) {
+  if (confirm('이 보상 쿠폰을 삭제하시겠습니까?')) {
+    store.data.coupons = store.data.coupons.filter(item => item.id !== couponId);
+    store.save();
+    renderMissionsScreen();
+  }
 }
 
 function useCoupon(couponId) {
