@@ -2608,18 +2608,54 @@ function validatePinAuth() {
   }
 }
 
+function setDeviceDefaultOwner(role) {
+  localStorage.setItem('couple_device_owner', role);
+  store.data.currentRole = role;
+  store.save();
+  renderHomeScreen();
+  if (currentTab === 'stats') renderStatsScreen();
+  if (currentTab === 'diet') renderDietScreen();
+  if (currentTab === 'missions') renderMissionsScreen();
+  alert(`📱 이 기기의 기본 사용자가 '${role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰'}'으로 고정되었습니다!`);
+}
+
+function changeMyPin() {
+  const role = store.data.currentRole;
+  const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+  const currentPin = (store.data.pins && store.data.pins[role]) || '1234';
+
+  const enteredCurrent = document.getElementById('pin-current-input').value.trim();
+  const enteredNew = document.getElementById('pin-new-input').value.trim();
+  const enteredConfirm = document.getElementById('pin-confirm-input').value.trim();
+
+  if (enteredCurrent !== currentPin) {
+    sfx.playRest();
+    return alert('현재 비밀번호가 일치하지 않습니다. (기본 초기값: 1234)');
+  }
+
+  if (!/^\d{4}$/.test(enteredNew)) {
+    return alert('새 비밀번호는 숫자 4자리로 입력해주세요!');
+  }
+
+  if (enteredNew !== enteredConfirm) {
+    return alert('새 비밀번호와 비밀번호 확인이 일치하지 않습니다.');
+  }
+
+  if (!store.data.pins) store.data.pins = {};
+  store.data.pins[role] = enteredNew;
+  store.save();
+
+  sfx.playSuccess();
+  document.getElementById('pin-current-input').value = '';
+  document.getElementById('pin-new-input').value = '';
+  document.getElementById('pin-confirm-input').value = '';
+
+  alert(`🔒 [${roleName}]의 4자리 비밀번호가 안전하게 변경되었습니다!`);
+}
+
 function saveAllAppSettings() {
   const url = document.getElementById('supabase-url-input').value.trim();
   const key = document.getElementById('supabase-key-input').value.trim();
-  const bfPin = document.getElementById('pin-input-bf').value.trim();
-  const gfPin = document.getElementById('pin-input-gf').value.trim();
-
-  if (bfPin && bfPin.length === 4) {
-    store.data.pins.boyfriend = bfPin;
-  }
-  if (gfPin && gfPin.length === 4) {
-    store.data.pins.girlfriend = gfPin;
-  }
 
   store.data.supabase.url = url;
   store.data.supabase.anonKey = key;
@@ -2627,23 +2663,31 @@ function saveAllAppSettings() {
   store.save();
 
   initSupabase();
-  alert('설정과 보안 비밀번호(PIN)가 안전하게 저장되었습니다! 🔒✨');
+  alert('설정이 안전하게 저장되었습니다! ✨');
   closeModal('modal-settings');
 }
 
 // --- 14. Application Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+  // 기기 기본 사용자 불러오기
+  const savedOwner = localStorage.getItem('couple_device_owner');
+  if (savedOwner === 'boyfriend' || savedOwner === 'girlfriend') {
+    store.data.currentRole = savedOwner;
+  }
+
   initSupabase();
 
   // 설정 모달 열릴 때 초기값 채우기
-  const pinBfInput = document.getElementById('pin-input-bf');
-  const pinGfInput = document.getElementById('pin-input-gf');
   const suUrlInput = document.getElementById('supabase-url-input');
   const suKeyInput = document.getElementById('supabase-key-input');
-  if (pinBfInput) pinBfInput.value = (store.data.pins && store.data.pins.boyfriend) || '1234';
-  if (pinGfInput) pinGfInput.value = (store.data.pins && store.data.pins.girlfriend) || '1234';
   if (suUrlInput) suUrlInput.value = store.data.supabase.url || '';
   if (suKeyInput) suKeyInput.value = store.data.supabase.anonKey || '';
+
+  // 기기 소유자 라디오 버튼 동기화
+  const ownerRadios = document.getElementsByName('device-owner-role');
+  for (let r of ownerRadios) {
+    if (r.value === store.data.currentRole) r.checked = true;
+  }
 
   // 2. 탭 내비게이션 바인딩
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {

@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=3.7">
+  <link rel="stylesheet" href="style.css?v=3.8">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -578,19 +578,45 @@
           <button class="icon-btn" onclick="closeModal('modal-settings')" style="border:none;">✕</button>
         </div>
 
-        <!-- PIN 보안 설정 -->
-        <div style="margin-bottom:14px; background:#FFF5F7; border:1px solid #FFE4E8; border-radius:12px; padding:12px;">
-          <div style="font-size:0.82rem; font-weight:800; color:#D81B60; margin-bottom:4px;">🔒 간편 4자리 PIN (비밀번호) 설정</div>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">체중 잠금해제 및 상대방 프로필 전환 방지를 위한 개인 PIN입니다.</div>
+        <!-- 이 기기의 기본 사용자 고정 -->
+        <div style="margin-bottom:14px; background:#F8F9FA; border:1px solid #ECEFF1; border-radius:12px; padding:12px;">
+          <label style="font-size:0.8rem; font-weight:800; color:var(--text-main); display:block; margin-bottom:4px;">📱 이 스마트폰의 기본 사용자</label>
+          <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">이 기기의 주인을 선택해두면 항상 내 프로필로 시작됩니다.</div>
           <div style="display:flex; gap:8px;">
-            <div style="flex:1;">
-              <label style="font-size:0.72rem; font-weight:700; color:#1976D2; display:block; margin-bottom:2px;">🏃‍♂️ 오동원 PIN</label>
-              <input type="password" maxlength="4" id="pin-input-bf" class="input-field" placeholder="기본: 1234" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
+              <input type="radio" name="device-owner-role" value="boyfriend" onchange="setDeviceDefaultOwner('boyfriend')" />
+              <span style="font-size:0.82rem; font-weight:700; color:#1976D2;">🏃‍♂️ 오동원 (남친)</span>
+            </label>
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
+              <input type="radio" name="device-owner-role" value="girlfriend" onchange="setDeviceDefaultOwner('girlfriend')" />
+              <span style="font-size:0.82rem; font-weight:700; color:#D81B60;">🐰 김해솔 (여친)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 내 비밀번호(PIN) 변경 (상대방 PIN 절대 노출 불가) -->
+        <div style="margin-bottom:14px; background:#FFF5F7; border:1px solid #FFE4E8; border-radius:12px; padding:12px;">
+          <div id="my-pin-setting-header" style="font-size:0.82rem; font-weight:800; color:#D81B60; margin-bottom:4px;">🔒 내 4자리 비밀번호(PIN) 변경</div>
+          <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">
+            상대방의 비밀번호는 볼 수 없으며, 본인 비밀번호만 현재 PIN 인증 후 변경할 수 있습니다.
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div>
+              <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">현재 비밀번호 4자리</label>
+              <input type="password" maxlength="4" id="pin-current-input" class="input-field" placeholder="현재 PIN (기본: 1234)" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
             </div>
-            <div style="flex:1;">
-              <label style="font-size:0.72rem; font-weight:700; color:#D81B60; display:block; margin-bottom:2px;">🐰 김해솔 PIN</label>
-              <input type="password" maxlength="4" id="pin-input-gf" class="input-field" placeholder="기본: 1234" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+            <div style="display:flex; gap:8px;">
+              <div style="flex:1;">
+                <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 비밀번호 4자리</label>
+                <input type="password" maxlength="4" id="pin-new-input" class="input-field" placeholder="새 PIN 4자리" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 비밀번호 확인</label>
+                <input type="password" maxlength="4" id="pin-confirm-input" class="input-field" placeholder="한 번 더 입력" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+              </div>
             </div>
+            <button class="btn-primary" style="padding:10px; font-size:0.8rem; background:linear-gradient(135deg, #FF69B4, #E91E63); margin-top:2px;" onclick="changeMyPin()">내 비밀번호 변경하기 🔑</button>
           </div>
         </div>
 
@@ -611,7 +637,7 @@
           <div style="font-size:0.7rem; color:#2E7D32; margin-top:2px;">* 안전하게 클라우드 실시간 동기화가 활성화됩니다.</div>
         </div>
 
-        <button class="btn-primary" style="width:100%; padding:14px; margin-bottom:10px;" onclick="saveAllAppSettings()">설정 및 비밀번호 저장하기</button>
+        <button class="btn-primary" style="width:100%; padding:14px; margin-bottom:10px;" onclick="saveAllAppSettings()">설정 저장하기</button>
         <button class="btn-primary" style="width:100%; padding:10px; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; font-size:0.8rem; box-shadow:none; margin-bottom:8px;" onclick="handleResetWeightData()">⚖️ 체중 기록만 전체 삭제/초기화</button>
         <button class="btn-primary" style="width:100%; padding:10px; background:#ECEFF1; color:#546E7A; font-size:0.8rem; box-shadow:none;" onclick="handleResetAppData()">🧹 앱 데이터 전체 비우기 (초기화)</button>
       </div>
@@ -866,6 +892,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=3.7"></script>
+  <script src="app.js?v=3.8"></script>
 </body>
 </html>
