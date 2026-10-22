@@ -396,10 +396,15 @@ function renderStatsScreen() {
   const partnerRole = role === 'boyfriend' ? 'girlfriend' : 'boyfriend';
   const today = getTodayStr();
 
-  // 오늘 걸음 수 표시
-  const todaySteps = store.data.stepLogs[today] || { boyfriend: 0, girlfriend: 0 };
-  const myStepInput = document.getElementById('step-input');
-  if (myStepInput) myStepInput.value = todaySteps[role] || '';
+  // 날짜 선택기 기본값 세팅
+  const stepDateInput = document.getElementById('step-date-input');
+  if (stepDateInput && !stepDateInput.value) stepDateInput.value = today;
+
+  const weightDateInput = document.getElementById('weight-date-input');
+  if (weightDateInput && !weightDateInput.value) weightDateInput.value = today;
+
+  // 선택된 날짜의 걸음 수 표시
+  onStepDateChange();
 
   // 주간 걸음 수 비교 차트 (Canvas)
   drawWeeklyStepChart();
@@ -449,17 +454,44 @@ function renderStatsScreen() {
   }
 }
 
+function onStepDateChange() {
+  const dateInput = document.getElementById('step-date-input');
+  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+  const role = store.data.currentRole;
+
+  const data = store.data.stepLogs[targetDate] || { boyfriend: 0, girlfriend: 0 };
+  const stepInput = document.getElementById('step-input');
+  if (stepInput) {
+    stepInput.value = data[role] > 0 ? data[role] : '';
+  }
+}
+
+function onWeightDateChange() {
+  const dateInput = document.getElementById('weight-date-input');
+  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+  const role = store.data.currentRole;
+
+  const list = store.data.weightLogs[role] || [];
+  const existing = list.find(item => item.date === targetDate);
+  const weightInput = document.getElementById('weight-input');
+  if (weightInput) {
+    weightInput.value = existing ? existing.weight : '';
+  }
+}
+
 function saveStepLog() {
   const val = parseInt(document.getElementById('step-input').value, 10);
   if (isNaN(val) || val < 0) return alert('올바른 걸음 수를 입력해주세요!');
 
-  const today = getTodayStr();
-  if (!store.data.stepLogs[today]) store.data.stepLogs[today] = { boyfriend: 0, girlfriend: 0 };
-  store.data.stepLogs[today][store.data.currentRole] = val;
+  const dateInput = document.getElementById('step-date-input');
+  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+
+  if (!store.data.stepLogs[targetDate]) store.data.stepLogs[targetDate] = { boyfriend: 0, girlfriend: 0 };
+  store.data.stepLogs[targetDate][store.data.currentRole] = val;
   store.save();
 
   sfx.playSuccess();
-  alert('오늘 걸음 수가 저장되었습니다! 👟');
+  alert(`${formatKoreanDate(targetDate)} 걸음 수가 저장되었습니다! 👟`);
   renderStatsScreen();
 }
 
@@ -468,24 +500,26 @@ function saveWeightLog() {
   if (isNaN(val) || val <= 20 || val >= 250) return alert('올바른 체중(kg)을 입력해주세요!');
 
   const role = store.data.currentRole;
-  const today = getTodayStr();
+  const dateInput = document.getElementById('weight-date-input');
+  const targetDate = (dateInput && dateInput.value) || getTodayStr();
   const list = store.data.weightLogs[role];
 
   let baseline = val;
   if (list.length > 0) baseline = list[0].baseline || list[0].weight;
 
   // 기존 날짜 있으면 업데이트, 없으면 추가
-  const existIdx = list.findIndex(item => item.date === today);
+  const existIdx = list.findIndex(item => item.date === targetDate);
   if (existIdx >= 0) {
     list[existIdx].weight = val;
   } else {
-    list.push({ date: today, weight: val, baseline });
+    list.push({ date: targetDate, weight: val, baseline });
+    list.sort((a, b) => new Date(a.date) - new Date(b.date));
   }
 
   store.save();
   sfx.playSuccess();
   document.getElementById('weight-input').value = '';
-  alert('비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒');
+  alert(`${formatKoreanDate(targetDate)} 비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒`);
   renderStatsScreen();
 }
 
@@ -553,12 +587,24 @@ function renderDietScreen() {
   if (!container) return;
   container.innerHTML = '';
 
-  const logs = [...store.data.dietLogs].reverse();
+  // 업로드 날짜 선택기 기본값 세팅
+  const dietDateInput = document.getElementById('diet-date-input');
+  if (dietDateInput && !dietDateInput.value) dietDateInput.value = getTodayStr();
+
+  // 날짜 필터 확인
+  const filterInput = document.getElementById('diet-filter-date');
+  const filterDate = filterInput ? filterInput.value : '';
+
+  let logs = [...store.data.dietLogs].reverse();
+
+  if (filterDate) {
+    logs = logs.filter(item => item.date === filterDate);
+  }
 
   if (logs.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center; padding: 40px 10px; color: var(--text-muted); font-size: 0.85rem;">
-        🥗 아직 등록된 식단 일기가 없어요.<br>오늘 먹은 맛있는 식사를 사진과 함께 남겨보세요!
+      <div style="text-align:center; padding: 30px 10px; color: var(--text-muted); font-size: 0.85rem;">
+        ${filterDate ? `📅 <b>${formatKoreanDate(filterDate)}</b>에 등록된 식단 일기가 없어요.` : `🥗 아직 등록된 식단 일기가 없어요.<br>먹은 맛있는 식사를 사진과 함께 남겨보세요!`}
       </div>
     `;
     return;
@@ -624,16 +670,25 @@ function handleDietPhotoUpload(e) {
   reader.readAsDataURL(file);
 }
 
+function clearDietDateFilter() {
+  const filterInput = document.getElementById('diet-filter-date');
+  if (filterInput) filterInput.value = '';
+  renderDietScreen();
+}
+
 function saveDietLog() {
   const memo = document.getElementById('diet-memo-input').value.trim();
   if (!currentPhotoDataUrl && !memo) {
     return alert('식단 사진을 등록하거나 한 줄 메모를 입력해주세요!');
   }
 
+  const dateInput = document.getElementById('diet-date-input');
+  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+
   const newLog = {
     id: 'd_' + Date.now(),
     role: store.data.currentRole,
-    date: getTodayStr(),
+    date: targetDate,
     mealType: selectedMealType,
     photoUrl: currentPhotoDataUrl,
     memo: memo || `${selectedMealType} 식사 기록`,
@@ -650,7 +705,7 @@ function saveDietLog() {
   document.getElementById('diet-preview-img').style.display = 'none';
   document.getElementById('diet-upload-text').style.display = 'block';
 
-  alert('식단 사진 일기가 등록되었습니다! 🥗');
+  alert(`${formatKoreanDate(targetDate)} 식단 사진 일기가 등록되었습니다! 🥗`);
   renderDietScreen();
 }
 
