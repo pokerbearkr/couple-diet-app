@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=3.2">
+  <link rel="stylesheet" href="style.css?v=3.3">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -370,17 +370,48 @@
 
       <!-- ================= TAB 4: 미션 & 보상 (대결/칭찬/쿠폰) ================= -->
       <section id="tab-missions" class="tab-page">
-        <!-- 1. 주간 미션 대결 -->
+        <!-- 1. 주간 미션 대결 & 벌칙 수행 내역 -->
         <div class="card">
           <div class="card-title-row">
             <div>
-              <div class="card-title"><span>⚔️</span> 주간 미션 대결</div>
-              <span class="card-subtitle">선의의 경쟁 & 귀여운 벌칙</span>
+              <div class="card-title"><span>⚔️</span> 주간 미션 & 벌칙 대결</div>
+              <span class="card-subtitle">선의의 경쟁 & 달콤한 벌칙 정산</span>
             </div>
-            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem;" onclick="openCreateMissionModal()">+ 미션 만들기</button>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-primary" style="padding:6px 10px; font-size:0.72rem; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; box-shadow:none;" onclick="openCreatePenaltyModal()">+ 벌칙 추가</button>
+              <button class="btn-primary" style="padding:6px 10px; font-size:0.72rem;" onclick="openCreateMissionModal()">+ 미션 만들기</button>
+            </div>
           </div>
-          <div id="missions-list">
-            <!-- JS 동적 렌더링 -->
+
+          <!-- 미션 vs 벌칙 서브 세그먼트 탭 -->
+          <div class="sub-segment-bar">
+            <button id="mission-tab-active" class="sub-segment-btn active" onclick="switchMissionSubTab('missions')">
+              <span>⚔️ 진행 중인 대결</span>
+              <span id="mission-active-cnt" class="sub-segment-badge">0</span>
+            </button>
+            <button id="mission-tab-penalty" class="sub-segment-btn" onclick="switchMissionSubTab('penalties')">
+              <span>🏆 벌칙 수행 / 내역</span>
+              <span id="penalty-active-cnt" class="sub-segment-badge">0</span>
+            </button>
+          </div>
+
+          <!-- 1-1. 진행 중인 미션 리스트 -->
+          <div id="missions-active-view">
+            <div id="missions-list">
+              <!-- JS 동적 렌더링 -->
+            </div>
+          </div>
+
+          <!-- 1-2. 벌칙 수행 & 히스토리 리스트 -->
+          <div id="penalties-view" style="display:none;">
+            <!-- 벌칙 서브 필터 (수행할 벌칙 vs 수행 완료) -->
+            <div class="quick-date-chips" style="margin-bottom:12px; justify-content:flex-start;">
+              <button id="pfilter-pending" class="quick-chip active" style="font-size:0.75rem; padding:4px 10px;" onclick="setPenaltyFilter('pending')">📌 수행할 벌칙 (<span id="penalty-pending-count">0</span>)</button>
+              <button id="pfilter-completed" class="quick-chip" style="font-size:0.75rem; padding:4px 10px;" onclick="setPenaltyFilter('completed')">✅ 수행 완료 내역 (<span id="penalty-completed-count">0</span>)</button>
+            </div>
+            <div id="penalties-list">
+              <!-- JS 동적 렌더링 -->
+            </div>
           </div>
         </div>
 
@@ -393,9 +424,23 @@
             </div>
             <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem; background:linear-gradient(135deg, #FFB74D, #FF9800);" onclick="openCreateCouponModal()">+ 쿠폰 만들기</button>
           </div>
-          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
+
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">
             둘 다 운동을 완료하여 모은 하트로 특별한 데이트 쿠폰을 여세요!
           </div>
+
+          <!-- 보유 쿠폰 vs 사용 완료 내역 서브 세그먼트 탭 -->
+          <div class="sub-segment-bar">
+            <button id="coupon-tab-available" class="sub-segment-btn active" onclick="switchCouponSubTab('available')">
+              <span>🎟️ 보유 중인 쿠폰</span>
+              <span id="coupon-available-cnt" class="sub-segment-badge">0</span>
+            </button>
+            <button id="coupon-tab-history" class="sub-segment-btn" onclick="switchCouponSubTab('history')">
+              <span>✨ 사용 완료 내역</span>
+              <span id="coupon-history-cnt" class="sub-segment-badge">0</span>
+            </button>
+          </div>
+
           <div id="coupons-list" class="coupon-grid">
             <!-- JS 동적 렌더링 -->
           </div>
@@ -574,6 +619,76 @@
       </div>
     </div>
 
+    <!-- 모달: 벌칙 직접 추가 / 수정 -->
+    <div id="modal-penalty-edit" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 id="modal-penalty-title-text" style="font-size:1.1rem; color:var(--text-main);">🏆 커플 벌칙 추가/수정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-penalty-edit')" style="border:none;">✕</button>
+        </div>
+
+        <input type="hidden" id="penalty-edit-id" value="" />
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">수행할 벌칙 내용</label>
+          <input type="text" id="penalty-title-input" class="input-field" placeholder="예: 주말에 달콤한 디저트 사주기 🍰" style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">벌칙 수행자 (패자)</label>
+          <div style="display:flex; gap:8px;">
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer;">
+              <input type="radio" name="penalty-loser" value="boyfriend" checked />
+              <span style="font-size:0.85rem; font-weight:700; color:#1976D2;">🏃‍♂️ 오동원</span>
+            </label>
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer;">
+              <input type="radio" name="penalty-loser" value="girlfriend" />
+              <span style="font-size:0.85rem; font-weight:700; color:#D81B60;">🐰 김해솔</span>
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">관련 미션 / 계기 (선택)</label>
+          <input type="text" id="penalty-from-input" class="input-field" placeholder="예: 주간 스쿼트 대결 🏋️" style="width:100%;" />
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:14px;" onclick="savePenaltyData()">벌칙 저장하기</button>
+      </div>
+    </div>
+
+    <!-- 모달: 미션 승부 정산하기 -->
+    <div id="modal-mission-settle" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main);">🏆 주간 미션 승부 정산</h3>
+          <button class="icon-btn" onclick="closeModal('modal-mission-settle')" style="border:none;">✕</button>
+        </div>
+
+        <input type="hidden" id="settle-mission-id" value="" />
+        
+        <div id="settle-mission-info" style="background:#FFF9F0; border:1px solid #FFE0B2; border-radius:10px; padding:12px; font-size:0.82rem; margin-bottom:14px;">
+          <!-- 동적 정보 주입 -->
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:6px;">🎉 이번 대결의 승자는 누구인가요?</label>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn-primary" style="background:linear-gradient(135deg, #42A5F5, #1E88E5); padding:12px; font-size:0.9rem;" onclick="confirmSettleWinner('boyfriend')">
+              🏃‍♂️ 오동원 승리! (김해솔 벌칙 확정)
+            </button>
+            <button class="btn-primary" style="background:linear-gradient(135deg, #FF69B4, #E91E63); padding:12px; font-size:0.9rem;" onclick="confirmSettleWinner('girlfriend')">
+              🐰 김해솔 승리! (오동원 벌칙 확정)
+            </button>
+          </div>
+        </div>
+
+        <div style="font-size:0.72rem; color:var(--text-light); text-align:center;">
+          * 승부를 정산하면 패자에게 벌칙이 자동 부여되고 미션 기록이 초기화됩니다.
+        </div>
+      </div>
+    </div>
+
     <!-- 모달: 커플 보상 쿠폰 생성/수정 -->
     <div id="modal-coupon-edit" class="modal-overlay">
       <div class="modal-box">
@@ -629,6 +744,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=3.2"></script>
+  <script src="app.js?v=3.3"></script>
 </body>
 </html>

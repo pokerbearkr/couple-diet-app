@@ -829,6 +829,94 @@ body {
   display: inline-block;
 }
 
+/* 서브 세그먼트 (보유 vs 사용 완료 / 진행 미션 vs 벌칙 내역) */
+.sub-segment-bar {
+  display: flex;
+  background: #F4EFEB;
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 12px;
+  gap: 4px;
+}
+
+.sub-segment-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 6px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.sub-segment-btn.active {
+  background: #FFFFFF;
+  color: var(--text-main);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.sub-segment-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #E8E0D9;
+  color: var(--text-muted);
+}
+
+.sub-segment-btn.active .sub-segment-badge {
+  background: var(--primary-pink);
+  color: #FFFFFF;
+}
+
+/* 벌칙 카드 스타일 */
+.penalty-card {
+  background: #FFFFFF;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.penalty-card.active-penalty {
+  border-left: 4px solid #FF9800;
+  background: linear-gradient(135deg, #FFFFFF, #FFFBF5);
+}
+
+.penalty-card.completed-penalty {
+  border-left: 4px solid #4CAF50;
+  background: #FAFAFA;
+  opacity: 0.88;
+}
+
+.penalty-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.penalty-user-badge.bf {
+  background: #E3F2FD;
+  color: #1976D2;
+}
+
+.penalty-user-badge.gf {
+  background: #FCE4EC;
+  color: #D81B60;
+}
+
 /* 칭찬 한마디 플로팅 */
 .cheer-chip-list {
   display: flex;

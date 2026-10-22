@@ -87,6 +87,19 @@ const DEFAULT_STATE = {
     }
   ],
   cheers: [],
+  penalties: [
+    {
+      id: 'p1',
+      title: '진 사람이 주말에 달콤한 디저트 사주기 🍰',
+      loser: 'boyfriend',
+      loserName: '오동원 🏃‍♂️',
+      targetName: '김해솔 🐰',
+      fromMission: '이번 주 5일 걷기/러닝 달성하기 👟',
+      completed: false,
+      completedAt: null,
+      createdAt: '2025-10-20'
+    }
+  ],
   coupons: [
     { id: 'cp1', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
     { id: 'cp2', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
@@ -111,6 +124,8 @@ class AppStore {
         bfName: '오동원 🏃‍♂️',
         gfName: '김해솔 🐰'
       };
+      if (!Array.isArray(data.penalties)) data.penalties = [];
+      if (!Array.isArray(data.coupons)) data.coupons = [];
       return data;
     } catch (e) {
       return { ...DEFAULT_STATE };
@@ -891,9 +906,90 @@ function saveDietLog() {
   renderDietScreen();
 }
 
-// --- 9. Feature 5, 6, 7: Missions, Cheers, Reward Box ---
+// --- 9. Feature 5, 6, 7: Missions, Penalties, Cheers, Reward Box ---
+let currentMissionSubTab = 'missions'; // 'missions' | 'penalties'
+let currentPenaltyFilter = 'pending'; // 'pending' | 'completed'
+let currentCouponSubTab = 'available'; // 'available' | 'history'
+
+function switchMissionSubTab(subTab) {
+  currentMissionSubTab = subTab;
+  const mBtn = document.getElementById('mission-tab-active');
+  const pBtn = document.getElementById('mission-tab-penalty');
+  const mView = document.getElementById('missions-active-view');
+  const pView = document.getElementById('penalties-view');
+
+  if (subTab === 'missions') {
+    if (mBtn) mBtn.classList.add('active');
+    if (pBtn) pBtn.classList.remove('active');
+    if (mView) mView.style.display = 'block';
+    if (pView) pView.style.display = 'none';
+  } else {
+    if (mBtn) mBtn.classList.remove('active');
+    if (pBtn) pBtn.classList.add('active');
+    if (mView) mView.style.display = 'none';
+    if (pView) pView.style.display = 'block';
+  }
+  renderMissionsScreen();
+}
+
+function setPenaltyFilter(filter) {
+  currentPenaltyFilter = filter;
+  const pendBtn = document.getElementById('pfilter-pending');
+  const compBtn = document.getElementById('pfilter-completed');
+  if (pendBtn && compBtn) {
+    if (filter === 'pending') {
+      pendBtn.classList.add('active');
+      compBtn.classList.remove('active');
+    } else {
+      pendBtn.classList.remove('active');
+      compBtn.classList.add('active');
+    }
+  }
+  renderPenaltiesList();
+}
+
+function switchCouponSubTab(subTab) {
+  currentCouponSubTab = subTab;
+  const availBtn = document.getElementById('coupon-tab-available');
+  const histBtn = document.getElementById('coupon-tab-history');
+
+  if (subTab === 'available') {
+    if (availBtn) availBtn.classList.add('active');
+    if (histBtn) histBtn.classList.remove('active');
+  } else {
+    if (availBtn) availBtn.classList.remove('active');
+    if (histBtn) histBtn.classList.add('active');
+  }
+  renderCouponList();
+}
+
 function renderMissionsScreen() {
-  // 1. 미션 리스트
+  const activeMissionsCount = store.data.missions.length;
+  const pendingPenalties = store.data.penalties.filter(p => !p.completed);
+  const completedPenalties = store.data.penalties.filter(p => p.completed);
+  const availableCoupons = store.data.coupons.filter(c => !c.used);
+  const historyCoupons = store.data.coupons.filter(c => c.used);
+
+  // 상단 뱃지 카운트 갱신
+  const mActiveCnt = document.getElementById('mission-active-cnt');
+  if (mActiveCnt) mActiveCnt.innerText = activeMissionsCount;
+
+  const pActiveCnt = document.getElementById('penalty-active-cnt');
+  if (pActiveCnt) pActiveCnt.innerText = pendingPenalties.length;
+
+  const pPendingCnt = document.getElementById('penalty-pending-count');
+  if (pPendingCnt) pPendingCnt.innerText = pendingPenalties.length;
+
+  const pCompletedCnt = document.getElementById('penalty-completed-count');
+  if (pCompletedCnt) pCompletedCnt.innerText = completedPenalties.length;
+
+  const cAvailCnt = document.getElementById('coupon-available-cnt');
+  if (cAvailCnt) cAvailCnt.innerText = availableCoupons.length;
+
+  const cHistCnt = document.getElementById('coupon-history-cnt');
+  if (cHistCnt) cHistCnt.innerText = historyCoupons.length;
+
+  // 1. 진행 중인 미션 리스트 렌더링
   const missionContainer = document.getElementById('missions-list');
   if (missionContainer) {
     missionContainer.innerHTML = '';
@@ -910,11 +1006,15 @@ function renderMissionsScreen() {
 
         const bfPct = Math.min((m.bfProgress / m.target) * 100, 100);
         const gfPct = Math.min((m.gfProgress / m.target) * 100, 100);
+        const isGoalReached = (m.bfProgress >= m.target) || (m.gfProgress >= m.target);
 
         card.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div>
-              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</span>
+                ${isGoalReached ? `<span style="background:#E8F5E9; color:#2E7D32; font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px;">🎉 목표 도달!</span>` : ''}
+              </div>
               <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit}</div>
             </div>
             <div style="display:flex; gap:4px;">
@@ -934,7 +1034,10 @@ function renderMissionsScreen() {
           </div>
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:6px;">
-            <span class="penalty-tag">벌칙: ${m.penalty}</span>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span class="penalty-tag">벌칙: ${m.penalty}</span>
+              <button class="btn-primary" style="padding:3px 8px; font-size:0.72rem; background:linear-gradient(135deg, #FFB74D, #FF9800);" onclick="openSettleMissionModal('${m.id}')">🏆 승부 정산</button>
+            </div>
             <div style="display:flex; gap:4px; align-items:center;">
               ${m.target >= 20 ? `
                 <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 10)">+10</button>
@@ -951,7 +1054,10 @@ function renderMissionsScreen() {
     }
   }
 
-  // 2. 칭찬 피드
+  // 2. 벌칙 수행 / 내역 렌더링
+  renderPenaltiesList();
+
+  // 3. 칭찬 피드
   const cheerContainer = document.getElementById('cheer-messages-list');
   if (cheerContainer) {
     cheerContainer.innerHTML = '';
@@ -977,8 +1083,240 @@ function renderMissionsScreen() {
     }
   }
 
-  // 3. 보상 상자 (하트 누적 쿠폰)
+  // 4. 보상 상자 (하트 누적 쿠폰)
   renderCouponList();
+}
+
+// --- 벌칙 리스트 렌더링 (수행할 벌칙 vs 완료 내역) ---
+function renderPenaltiesList() {
+  const container = document.getElementById('penalties-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const list = store.data.penalties.filter(p => currentPenaltyFilter === 'completed' ? p.completed : !p.completed);
+
+  if (list.length === 0) {
+    if (currentPenaltyFilter === 'pending') {
+      container.innerHTML = `
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+          🎉 현재 수행 대기 중인 벌칙이 없어요!<br>미션 승부를 정산하거나 <b>'+ 벌칙 추가'</b>로 재미있는 벌칙을 걸어보세요.
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+          ✨ 아직 수행 완료한 벌칙 내역이 없어요.
+        </div>
+      `;
+    }
+    return;
+  }
+
+  list.forEach(p => {
+    const card = document.createElement('div');
+    card.className = `penalty-card ${p.completed ? 'completed-penalty' : 'active-penalty'}`;
+
+    const isBfLoser = p.loser === 'boyfriend';
+    const loserBadge = isBfLoser
+      ? `<span class="penalty-user-badge bf">🏃‍♂️ 오동원 (수행자)</span>`
+      : `<span class="penalty-user-badge gf">🐰 김해솔 (수행자)</span>`;
+    
+    const targetBadge = isBfLoser
+      ? `<span class="penalty-user-badge gf">🐰 김해솔에게</span>`
+      : `<span class="penalty-user-badge bf">🏃‍♂️ 오동원에게</span>`;
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+            ${loserBadge}
+            <span style="font-size:0.75rem; color:var(--text-light);">➔</span>
+            ${targetBadge}
+          </div>
+          <div style="font-weight:800; font-size:0.95rem; color:var(--text-main); margin-top:4px;">
+            ${p.title}
+          </div>
+          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">
+            ${p.fromMission ? `계기: ${p.fromMission} • ` : ''}등록: ${p.createdAt || '최근'}
+            ${p.completed ? ` • <b style="color:#2E7D32;">✅ ${p.completedAt || '수행 완료'}</b>` : ''}
+          </div>
+        </div>
+        <div style="display:flex; gap:4px;">
+          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditPenaltyModal('${p.id}')" title="수정">✏️</button>
+          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deletePenalty('${p.id}')" title="삭제">🗑️</button>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:10px; gap:6px;">
+        ${!p.completed ? `
+          <button class="btn-primary" style="padding:5px 12px; font-size:0.78rem; background:linear-gradient(135deg, #4CAF50, #43A047);" onclick="togglePenaltyComplete('${p.id}', true)">
+            수행 완료! 🎉
+          </button>
+        ` : `
+          <button class="btn-primary" style="padding:4px 10px; font-size:0.72rem; background:#ECEFF1; color:#455A64; box-shadow:none;" onclick="togglePenaltyComplete('${p.id}', false)">
+            되돌리기 ↩️
+          </button>
+        `}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// --- 미션 승부 정산 모달 로직 ---
+function openSettleMissionModal(missionId) {
+  const m = store.data.missions.find(item => item.id === missionId);
+  if (!m) return;
+
+  document.getElementById('settle-mission-id').value = m.id;
+  const infoEl = document.getElementById('settle-mission-info');
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <div style="font-weight:800; font-size:0.92rem; color:var(--text-main); margin-bottom:4px;">${m.title}</div>
+      <div style="color:var(--text-muted); font-size:0.78rem;">
+        🏃‍♂️ 오동원: <b>${m.bfProgress}${m.unit}</b> vs 🐰 김해솔: <b>${m.gfProgress}${m.unit}</b> (목표: ${m.target}${m.unit})
+      </div>
+      <div style="color:#E65100; font-size:0.78rem; font-weight:700; margin-top:4px;">
+        패자 벌칙: ${m.penalty}
+      </div>
+    `;
+  }
+  openModal('modal-mission-settle');
+}
+
+function confirmSettleWinner(winnerRole) {
+  const missionId = document.getElementById('settle-mission-id').value;
+  const m = store.data.missions.find(item => item.id === missionId);
+  if (!m) return;
+
+  const loserRole = winnerRole === 'boyfriend' ? 'girlfriend' : 'boyfriend';
+  const loserName = loserRole === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
+  const winnerName = winnerRole === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
+
+  // 벌칙 등록
+  const newPenalty = {
+    id: 'p_' + Date.now(),
+    title: m.penalty,
+    loser: loserRole,
+    loserName,
+    targetName: winnerName,
+    fromMission: m.title,
+    completed: false,
+    completedAt: null,
+    createdAt: getTodayStr()
+  };
+
+  store.data.penalties.unshift(newPenalty);
+
+  // 미션 진행률 리셋 (다음 라운드 시작)
+  m.bfProgress = 0;
+  m.gfProgress = 0;
+  store.save();
+
+  closeModal('modal-mission-settle');
+  sfx.playSuccess();
+  createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
+  alert(`🎉 ${winnerName} 승리!\n'${loserName}'에게 [${m.penalty}] 벌칙이 부여되었습니다! 🏆`);
+
+  // 벌칙 탭으로 자동 이동
+  switchMissionSubTab('penalties');
+  setPenaltyFilter('pending');
+}
+
+// --- 벌칙 생성/수정/완료/삭제 로직 ---
+function openCreatePenaltyModal() {
+  document.getElementById('modal-penalty-title-text').innerText = '🏆 커플 벌칙 직접 추가';
+  document.getElementById('penalty-edit-id').value = '';
+  document.getElementById('penalty-title-input').value = '';
+  document.getElementById('penalty-from-input').value = '';
+  openModal('modal-penalty-edit');
+}
+
+function openEditPenaltyModal(penaltyId) {
+  const p = store.data.penalties.find(item => item.id === penaltyId);
+  if (!p) return;
+
+  document.getElementById('modal-penalty-title-text').innerText = '🏆 커플 벌칙 수정';
+  document.getElementById('penalty-edit-id').value = p.id;
+  document.getElementById('penalty-title-input').value = p.title;
+  document.getElementById('penalty-from-input').value = p.fromMission || '';
+
+  const radios = document.getElementsByName('penalty-loser');
+  for (let r of radios) {
+    if (r.value === p.loser) r.checked = true;
+  }
+
+  openModal('modal-penalty-edit');
+}
+
+function savePenaltyData() {
+  const editId = document.getElementById('penalty-edit-id').value;
+  const title = document.getElementById('penalty-title-input').value.trim();
+  const fromMission = document.getElementById('penalty-from-input').value.trim();
+
+  let loser = 'boyfriend';
+  const radios = document.getElementsByName('penalty-loser');
+  for (let r of radios) {
+    if (r.checked) loser = r.value;
+  }
+
+  if (!title) return alert('벌칙 내용을 입력해주세요!');
+
+  const loserName = loser === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
+  const targetName = loser === 'boyfriend' ? store.data.couple.gfName : store.data.couple.bfName;
+
+  if (editId) {
+    const p = store.data.penalties.find(item => item.id === editId);
+    if (p) {
+      p.title = title;
+      p.loser = loser;
+      p.loserName = loserName;
+      p.targetName = targetName;
+      p.fromMission = fromMission;
+    }
+  } else {
+    const newPenalty = {
+      id: 'p_' + Date.now(),
+      title,
+      loser,
+      loserName,
+      targetName,
+      fromMission: fromMission || '직접 등록한 벌칙',
+      completed: false,
+      completedAt: null,
+      createdAt: getTodayStr()
+    };
+    store.data.penalties.unshift(newPenalty);
+  }
+
+  store.save();
+  sfx.playSuccess();
+  closeModal('modal-penalty-edit');
+  renderMissionsScreen();
+}
+
+function deletePenalty(penaltyId) {
+  if (confirm('이 벌칙을 삭제하시겠습니까?')) {
+    store.data.penalties = store.data.penalties.filter(item => item.id !== penaltyId);
+    store.save();
+    renderMissionsScreen();
+  }
+}
+
+function togglePenaltyComplete(penaltyId, markAsCompleted) {
+  const p = store.data.penalties.find(item => item.id === penaltyId);
+  if (!p) return;
+
+  p.completed = markAsCompleted;
+  p.completedAt = markAsCompleted ? getTodayStr() : null;
+  store.save();
+
+  if (markAsCompleted) {
+    sfx.playSuccess();
+    createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+    alert(`👏 벌칙 [${p.title}] 수행이 완료되었습니다!`);
+  }
+  renderMissionsScreen();
 }
 
 // --- 주간 미션 생성/수정/삭제 로직 ---
@@ -1135,7 +1473,7 @@ function checkRewardBoxUnlocks() {
   store.save();
 }
 
-// --- 커플 보상 쿠폰 생성/수정/삭제 로직 ---
+// --- 커플 보상 쿠폰 생성/수정/삭제/카테고리 렌더링 ---
 function renderCouponList() {
   const container = document.getElementById('coupons-list');
   if (!container) return;
@@ -1145,19 +1483,29 @@ function renderCouponList() {
   const heartCountEl = document.getElementById('total-heart-count');
   if (heartCountEl) heartCountEl.innerText = `현재 모은 커플 하트: 💖 ${totalHearts}개`;
 
-  if (store.data.coupons.length === 0) {
-    container.innerHTML = `
-      <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
-        🎁 아직 등록된 데이트 쿠폰이 없어요.<br>우측 상단 <b>'+ 쿠폰 만들기'</b>로 목표 보상을 걸어보세요!
-      </div>
-    `;
+  const filteredCoupons = store.data.coupons.filter(cp => currentCouponSubTab === 'history' ? cp.used : !cp.used);
+
+  if (filteredCoupons.length === 0) {
+    if (currentCouponSubTab === 'available') {
+      container.innerHTML = `
+        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
+          🎁 보유 중인 데이트 쿠폰이 없어요.<br>우측 상단 <b>'+ 쿠폰 만들기'</b>로 새로운 목표를 세워보세요!
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
+          ✨ 아직 사용 완료한 쿠폰 내역이 없어요.<br>열심히 운동하고 모은 하트로 데이트 쿠폰을 사용해보세요! 🥰
+        </div>
+      `;
+    }
     return;
   }
 
-  store.data.coupons.forEach(cp => {
+  filteredCoupons.forEach(cp => {
     const isReady = totalHearts >= cp.requiredHearts;
     const card = document.createElement('div');
-    card.className = `coupon-card ${!isReady ? 'locked' : ''}`;
+    card.className = `coupon-card ${cp.used ? 'used' : (!isReady ? 'locked' : '')}`;
 
     card.innerHTML = `
       <div style="flex:1;">
@@ -1169,12 +1517,16 @@ function renderCouponList() {
           </div>
         </div>
         <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
-          필요 하트: 💖 ${cp.requiredHearts}개 (${isReady ? '잠금 해제 완료!' : `앞으로 ${cp.requiredHearts - totalHearts}개 남음`})
+          ${cp.used ? `
+            <span style="color:#2E7D32; font-weight:700;">🎉 ${cp.usedAt || '최근'} 사용 완료</span>
+          ` : `
+            필요 하트: 💖 ${cp.requiredHearts}개 (${isReady ? '잠금 해제 완료!' : `앞으로 ${cp.requiredHearts - totalHearts}개 남음`})
+          `}
         </div>
       </div>
       <div>
         ${cp.used
-          ? `<button class="coupon-btn used">사용 완료</button>`
+          ? `<button class="coupon-btn" style="background:#ECEFF1; color:#455A64; box-shadow:none; padding:5px 10px; font-size:0.72rem;" onclick="restoreCoupon('${cp.id}')">되돌리기 ↩️</button>`
           : isReady
             ? `<button class="coupon-btn" onclick="useCoupon('${cp.id}')">사용하기 🎁</button>`
             : `<button class="coupon-btn locked" style="background:#B0BEC5; cursor:not-allowed;">🔒 잠김</button>`
@@ -1249,9 +1601,22 @@ function useCoupon(couponId) {
 
   if (confirm(`'${cp.title}' 데이트 쿠폰을 사용하시겠습니까? 🥰`)) {
     cp.used = true;
+    cp.usedAt = getTodayStr();
     store.save();
     sfx.playSuccess();
     createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
+    renderMissionsScreen();
+  }
+}
+
+function restoreCoupon(couponId) {
+  const cp = store.data.coupons.find(c => c.id === couponId);
+  if (!cp) return;
+
+  if (confirm(`'${cp.title}' 쿠폰을 다시 보유 중인 쿠폰으로 되돌리시겠습니까?`)) {
+    cp.used = false;
+    delete cp.usedAt;
+    store.save();
     renderMissionsScreen();
   }
 }
