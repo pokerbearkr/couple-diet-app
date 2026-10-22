@@ -2145,6 +2145,21 @@ async function loadFromSupabase() {
       }));
     }
 
+    // 9. 커플 PIN 비밀번호 불러오기
+    try {
+      const { data: pinList } = await supabaseClient.from('couple_pins').select('*');
+      if (pinList && pinList.length > 0) {
+        if (!store.data.pins) store.data.pins = { boyfriend: '1234', girlfriend: '1234' };
+        pinList.forEach(p => {
+          if (p.user_role && p.pin) {
+            store.data.pins[p.user_role] = String(p.pin);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('couple_pins fetch warning:', e);
+    }
+
     store.save();
     renderHomeScreen();
     if (currentTab === 'stats') renderStatsScreen();
@@ -2232,6 +2247,13 @@ function setupSupabaseRealtime() {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'penalties' }, () => {
       loadFromSupabase();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'couple_pins' }, (payload) => {
+      if (payload.new && payload.new.user_role && payload.new.pin) {
+        if (!store.data.pins) store.data.pins = { boyfriend: '1234', girlfriend: '1234' };
+        store.data.pins[payload.new.user_role] = String(payload.new.pin);
+        store.save();
+      }
     })
     .subscribe();
 }
@@ -2463,6 +2485,33 @@ async function deletePenaltyFromSupabase(penaltyId) {
   }
 }
 
+async function syncPinToSupabase(role, newPin) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('couple_pins').upsert({
+      user_role: role,
+      pin: String(newPin),
+      updated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Supabase PIN sync error:', err);
+  }
+}
+
+async function refreshPinFromSupabase(role) {
+  if (!supabaseClient || !role) return;
+  try {
+    const { data } = await supabaseClient.from('couple_pins').select('*').eq('user_role', role).maybeSingle();
+    if (data && data.pin) {
+      if (!store.data.pins) store.data.pins = { boyfriend: '1234', girlfriend: '1234' };
+      store.data.pins[role] = String(data.pin);
+      store.save();
+    }
+  } catch (e) {
+    console.warn('refreshPin error:', e);
+  }
+}
+
 async function handleResetWeightData() {
   if (confirm('저장된 모든 체중 기록(오동원 & 김해솔)을 초기화할까요?\n* 클라우드 DB와 기기에서 체중 데이터가 완전히 삭제됩니다.')) {
     store.data.weightLogs = { boyfriend: [], girlfriend: [] };
@@ -2534,6 +2583,11 @@ function lockWeightDisplay() {
 }
 
 function openPinAuthModal(title, desc, icon = '🔒') {
+  const targetRole = activeAuthAction === 'switch_profile' ? targetProfileForSwitch : store.data.currentRole;
+  if (targetRole) {
+    refreshPinFromSupabase(targetRole);
+  }
+
   document.getElementById('pin-auth-title').innerText = title;
   document.getElementById('pin-auth-desc').innerText = desc;
   document.getElementById('pin-auth-icon').innerText = icon;
@@ -2619,9 +2673,14 @@ function setDeviceDefaultOwner(role) {
   alert(`📱 이 기기의 기본 사용자가 '${role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰'}'으로 고정되었습니다!`);
 }
 
-function changeMyPin() {
+async function changeMyPin() {
   const role = store.data.currentRole;
   const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+
+  if (supabaseClient) {
+    await refreshPinFromSupabase(role);
+  }
+
   const currentPin = (store.data.pins && store.data.pins[role]) || '1234';
 
   const enteredCurrent = document.getElementById('pin-current-input').value.trim();
@@ -2645,12 +2704,15 @@ function changeMyPin() {
   store.data.pins[role] = enteredNew;
   store.save();
 
+  // 클라우드 Supabase에 즉시 동기화
+  await syncPinToSupabase(role, enteredNew);
+
   sfx.playSuccess();
   document.getElementById('pin-current-input').value = '';
   document.getElementById('pin-new-input').value = '';
   document.getElementById('pin-confirm-input').value = '';
 
-  alert(`🔒 [${roleName}]의 4자리 비밀번호가 안전하게 변경되었습니다!`);
+  alert(`🔒 [${roleName}]의 4자리 비밀번호가 안전하게 변경되어 클라우드에 동기화되었습니다!`);
 }
 
 function saveAllAppSettings() {

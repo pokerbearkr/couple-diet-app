@@ -118,6 +118,13 @@ CREATE TABLE IF NOT EXISTS public.penalties (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 11. 커플 보안 PIN 테이블 (각 사용자별 개인 4자리 PIN 실시간 동기화)
+CREATE TABLE IF NOT EXISTS public.couple_pins (
+    user_role VARCHAR(20) PRIMARY KEY,
+    pin VARCHAR(20) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ========================================================
 -- RLS (보안 정책) 활성화 및 커플 앱 읽기/쓰기 권한 허용
 -- ========================================================
@@ -131,6 +138,7 @@ ALTER TABLE public.missions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cheers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reward_box ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.penalties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.couple_pins ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all access to couples" ON public.couples;
 DROP POLICY IF EXISTS "Allow all access to profiles" ON public.profiles;
@@ -142,6 +150,7 @@ DROP POLICY IF EXISTS "Allow all access to missions" ON public.missions;
 DROP POLICY IF EXISTS "Allow all access to cheers" ON public.cheers;
 DROP POLICY IF EXISTS "Allow all access to reward_box" ON public.reward_box;
 DROP POLICY IF EXISTS "Allow all access to penalties" ON public.penalties;
+DROP POLICY IF EXISTS "Allow all access to couple_pins" ON public.couple_pins;
 
 CREATE POLICY "Allow all access to couples" ON public.couples FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
@@ -153,13 +162,16 @@ CREATE POLICY "Allow all access to missions" ON public.missions FOR ALL USING (t
 CREATE POLICY "Allow all access to cheers" ON public.cheers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to reward_box" ON public.reward_box FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to penalties" ON public.penalties FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to couple_pins" ON public.couple_pins FOR ALL USING (true) WITH CHECK (true);
 
 -- 실시간 (Realtime) 동기화 활성화
-ALTER PUBLICATION supabase_realtime ADD TABLE public.attendance;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.step_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.diet_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cheers;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.missions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.reward_box;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.penalties;
+ALTER PUBLICATION supabase_realtime SET TABLE
+    public.attendance,
+    public.step_logs,
+    public.weight_logs,
+    public.diet_logs,
+    public.cheers,
+    public.missions,
+    public.reward_box,
+    public.penalties,
+    public.couple_pins;
