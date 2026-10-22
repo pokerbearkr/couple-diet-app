@@ -59,6 +59,10 @@ const DEFAULT_STATE = {
     anonKey: 'sb_publishable_T-fLfm7ATY-3Vec4ZjS24Q_DtACNgqK',
     connected: false
   },
+  pins: {
+    boyfriend: '1234',
+    girlfriend: '1234'
+  },
   attendance: {},
   stepLogs: {},
   weightLogs: {
@@ -126,6 +130,9 @@ class AppStore {
       };
       if (!Array.isArray(data.penalties)) data.penalties = [];
       if (!Array.isArray(data.coupons)) data.coupons = [];
+      if (!data.pins) {
+        data.pins = { boyfriend: '1234', girlfriend: '1234' };
+      }
       if (!data.supabase || !data.supabase.url) {
         data.supabase = {
           url: 'https://phrquhzdmssheveiyvei.supabase.co',
@@ -631,7 +638,9 @@ function updateDietInputUI() {
   if (lbl) lbl.innerText = formatDatePretty(selectedDietDate);
 }
 
-// --- 8. Stats Screen Rendering ---
+// --- 8. Stats Screen Rendering (비밀번호 보안 잠금) ---
+let isWeightUnlocked = false;
+
 function renderStatsScreen() {
   const role = store.data.currentRole;
   const partnerRole = role === 'boyfriend' ? 'girlfriend' : 'boyfriend';
@@ -640,13 +649,15 @@ function renderStatsScreen() {
   updateWeightUI();
   drawWeeklyStepChart();
 
-  // 체중 기록 섹션 (프라이버시 중심)
+  // 체중 기록 섹션 (프라이버시 & PIN 잠금)
   const myLogs = store.data.weightLogs[role] || [];
   const partnerLogs = store.data.weightLogs[partnerRole] || [];
 
   const myLatest = myLogs[myLogs.length - 1];
   const partnerLatest = partnerLogs[partnerLogs.length - 1];
 
+  const lockedView = document.getElementById('my-weight-locked-view');
+  const unlockedView = document.getElementById('my-weight-unlocked-view');
   const myWeightDisplay = document.getElementById('my-weight-display');
   const myDeltaDisplay = document.getElementById('my-delta-display');
   const partnerDeltaDisplay = document.getElementById('partner-delta-display');
@@ -656,17 +667,26 @@ function renderStatsScreen() {
     partnerNameLabel.innerText = `${role === 'boyfriend' ? '김해솔 🐰' : '오동원 🏃‍♂️'}의 체중 변화 추이`;
   }
 
-  if (myLatest) {
-    if (myWeightDisplay) myWeightDisplay.innerText = `${myLatest.weight} kg`;
-    const diff = (myLatest.weight - myLatest.baseline).toFixed(1);
-    const sign = diff > 0 ? `+${diff}` : `${diff}`;
-    if (myDeltaDisplay) myDeltaDisplay.innerText = `시작 대비 ${sign} kg (${diff <= 0 ? '감량 성공 중! 👏' : '유지 중'})`;
+  // 본인 체중: 잠금 상태 제어
+  if (isWeightUnlocked) {
+    if (lockedView) lockedView.style.display = 'none';
+    if (unlockedView) unlockedView.style.display = 'flex';
+
+    if (myLatest) {
+      if (myWeightDisplay) myWeightDisplay.innerText = `${myLatest.weight} kg`;
+      const diff = (myLatest.weight - myLatest.baseline).toFixed(1);
+      const sign = diff > 0 ? `+${diff}` : `${diff}`;
+      if (myDeltaDisplay) myDeltaDisplay.innerText = `시작 대비 ${sign} kg (${diff <= 0 ? '감량 성공 중! 👏' : '유지 중'})`;
+    } else {
+      if (myWeightDisplay) myWeightDisplay.innerText = `- kg`;
+      if (myDeltaDisplay) myDeltaDisplay.innerText = `체중을 기록해보세요`;
+    }
   } else {
-    if (myWeightDisplay) myWeightDisplay.innerText = `- kg`;
-    if (myDeltaDisplay) myDeltaDisplay.innerText = `체중을 기록해보세요`;
+    if (lockedView) lockedView.style.display = 'flex';
+    if (unlockedView) unlockedView.style.display = 'none';
   }
 
-  // 상대방 체중은 '절대 숫자'를 숨기고 '변화량만' 표시
+  // 상대방 체중: 절대 숫자는 영구 비공개, 변화량만 표시
   if (partnerLatest) {
     const pDiff = (partnerLatest.weight - partnerLatest.baseline).toFixed(1);
     const pSign = pDiff > 0 ? `+${pDiff}` : `${pDiff}`;
@@ -675,8 +695,8 @@ function renderStatsScreen() {
         <div style="font-size:1.15rem; font-weight:800; color:#2E7D32; margin-top:4px;">
           시작 대비 <span style="font-size:1.35rem;">${pSign} kg</span> 변화 중! ✨
         </div>
-        <div style="font-size:0.78rem; color:#66BB6A; margin-top:4px;">
-          🔒 프라이버시 보호: 실제 체중 숫자는 비공개 처리됩니다.
+        <div style="font-size:0.75rem; color:#66BB6A; margin-top:4px;">
+          🔒 프라이버시 보호: 실제 체중 숫자는 어떤 경우에도 상대방에게 노출되지 않습니다.
         </div>
       `;
     }
@@ -791,6 +811,10 @@ function drawWeeklyStepChart() {
 let selectedMealType = '점심';
 let currentPhotoDataUrl = null;
 
+let currentLightboxItem = null;
+let currentDietEditPhoto = null;
+let editSelectedMealType = '점심';
+
 function renderDietScreen() {
   const container = document.getElementById('diet-timeline');
   if (!container) return;
@@ -825,13 +849,23 @@ function renderDietScreen() {
     const badgeColor = item.role === 'boyfriend' ? '#BBDEFB' : '#FFCCD5';
 
     card.innerHTML = `
-      ${item.photoUrl ? `<img src="${item.photoUrl}" class="diet-thumb" alt="식단 사진" />` : `<div class="diet-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;">🍽️</div>`}
+      ${item.photoUrl ? `
+        <img src="${item.photoUrl}" class="diet-thumb" onclick="openPhotoLightbox('${item.id}')" title="사진 확대 및 다운로드" alt="식단 사진" />
+      ` : `
+        <div class="diet-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;cursor:default;">🍽️</div>
+      `}
       <div style="flex:1;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span style="font-size:0.75rem; background:${badgeColor}; padding:2px 8px; border-radius:12px; font-weight:700;">
             ${authorName} · ${item.mealType}
           </span>
-          <span style="font-size:0.72rem; color:var(--text-light);">${formatKoreanDate(item.date)}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:0.72rem; color:var(--text-light);">${formatKoreanDate(item.date)}</span>
+            <div class="diet-actions">
+              <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="openEditDietModal('${item.id}')" title="수정">✏️</button>
+              <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="deleteDietLog('${item.id}')" title="삭제">🗑️</button>
+            </div>
+          </div>
         </div>
         <p style="font-size:0.88rem; font-weight:600; color:var(--text-main); margin-top:6px; line-height:1.4;">
           ${item.memo || '맛있게 건강하게 식사 완료! 😋'}
@@ -840,6 +874,156 @@ function renderDietScreen() {
     `;
     container.appendChild(card);
   });
+}
+
+// --- 사진 확대 라이트박스 & 다운로드 ---
+function openPhotoLightbox(dietId) {
+  const item = store.data.dietLogs.find(d => d.id === dietId);
+  if (!item || !item.photoUrl) return;
+
+  currentLightboxItem = item;
+  const imgEl = document.getElementById('lightbox-img');
+  const captionEl = document.getElementById('lightbox-caption');
+
+  if (imgEl) imgEl.src = item.photoUrl;
+  if (captionEl) {
+    const authorName = item.role === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
+    captionEl.innerHTML = `
+      <div style="font-weight:800; font-size:0.95rem; margin-bottom:2px;">${authorName} · ${item.mealType} (${formatKoreanDate(item.date)})</div>
+      <div style="font-size:0.82rem; opacity:0.9;">${item.memo || ''}</div>
+    `;
+  }
+
+  openModal('modal-photo-lightbox');
+}
+
+function closePhotoLightbox() {
+  closeModal('modal-photo-lightbox');
+  currentLightboxItem = null;
+}
+
+function downloadCurrentPhoto() {
+  if (!currentLightboxItem || !currentLightboxItem.photoUrl) return;
+
+  const link = document.createElement('a');
+  link.href = currentLightboxItem.photoUrl;
+  link.download = `식단_${currentLightboxItem.date}_${currentLightboxItem.mealType}.jpg`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  sfx.playSuccess();
+}
+
+// --- 식단 일기 수정 및 삭제 ---
+function openEditDietModal(dietId) {
+  const item = store.data.dietLogs.find(d => d.id === dietId);
+  if (!item) return;
+
+  document.getElementById('diet-edit-id').value = item.id;
+  document.getElementById('diet-edit-memo').value = item.memo || '';
+  currentDietEditPhoto = item.photoUrl || null;
+  editSelectedMealType = item.mealType || '점심';
+
+  // 칩 활성화 상태 동기화
+  const chips = document.querySelectorAll('.edit-meal-chip');
+  chips.forEach(c => {
+    if (c.dataset.type === editSelectedMealType) {
+      c.classList.add('active');
+    } else {
+      c.classList.remove('active');
+    }
+  });
+
+  const preview = document.getElementById('diet-edit-preview');
+  const uploadText = document.getElementById('diet-edit-upload-text');
+  if (currentDietEditPhoto) {
+    if (preview) {
+      preview.src = currentDietEditPhoto;
+      preview.style.display = 'block';
+    }
+    if (uploadText) uploadText.innerText = '📷 터치하여 다른 사진으로 교체';
+  } else {
+    if (preview) preview.style.display = 'none';
+    if (uploadText) uploadText.innerText = '📷 터치하여 사진 추가';
+  }
+
+  openModal('modal-diet-edit');
+}
+
+function setEditMealType(type) {
+  editSelectedMealType = type;
+  const chips = document.querySelectorAll('.edit-meal-chip');
+  chips.forEach(c => {
+    if (c.dataset.type === type) {
+      c.classList.add('active');
+    } else {
+      c.classList.remove('active');
+    }
+  });
+}
+
+function handleDietEditPhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 800;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxW) {
+        h = (maxW / w) * h;
+        w = maxW;
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      currentDietEditPhoto = canvas.toDataURL('image/jpeg', 0.8);
+
+      const preview = document.getElementById('diet-edit-preview');
+      const uploadText = document.getElementById('diet-edit-upload-text');
+      if (preview) {
+        preview.src = currentDietEditPhoto;
+        preview.style.display = 'block';
+      }
+      if (uploadText) uploadText.innerText = '📷 터치하여 다른 사진으로 교체';
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveEditedDietLog() {
+  const editId = document.getElementById('diet-edit-id').value;
+  const item = store.data.dietLogs.find(d => d.id === editId);
+  if (!item) return;
+
+  const memo = document.getElementById('diet-edit-memo').value.trim();
+  item.memo = memo || `${editSelectedMealType} 식사 기록`;
+  item.mealType = editSelectedMealType;
+  if (currentDietEditPhoto) item.photoUrl = currentDietEditPhoto;
+
+  store.save();
+  updateDietInSupabase(item);
+
+  sfx.playSuccess();
+  closeModal('modal-diet-edit');
+  renderDietScreen();
+  alert('식단 일기가 성공적으로 수정되었습니다! 🥗');
+}
+
+function deleteDietLog(dietId) {
+  if (confirm('이 식단 일기를 삭제하시겠습니까?')) {
+    store.data.dietLogs = store.data.dietLogs.filter(d => d.id !== dietId);
+    store.save();
+    deleteDietFromSupabase(dietId);
+    sfx.playSuccess();
+    renderDietScreen();
+  }
 }
 
 function handleDietPhotoUpload(e) {
@@ -2100,15 +2284,46 @@ async function syncWeightToSupabase(date, role, weightKg, baselineWeight) {
 async function syncDietToSupabase(newDiet) {
   if (!supabaseClient) return;
   try {
-    await supabaseClient.from('diet_logs').insert({
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newDiet.id);
+    const row = {
       user_role: newDiet.role,
       date: newDiet.date,
       meal_type: newDiet.mealType,
       photo_url: newDiet.photoUrl,
       memo: newDiet.memo
-    });
+    };
+    if (isNumericId) row.id = newDiet.id;
+    await supabaseClient.from('diet_logs').upsert(row);
   } catch (e) {
     console.error('Supabase diet sync error:', e);
+  }
+}
+
+async function updateDietInSupabase(dietItem) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dietItem.id);
+    if (isNumericId) {
+      await supabaseClient.from('diet_logs').update({
+        meal_type: dietItem.mealType,
+        photo_url: dietItem.photoUrl,
+        memo: dietItem.memo
+      }).eq('id', dietItem.id);
+    }
+  } catch (e) {
+    console.error('Supabase diet update error:', e);
+  }
+}
+
+async function deleteDietFromSupabase(dietId) {
+  if (!supabaseClient) return;
+  try {
+    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dietId);
+    if (isNumericId) {
+      await supabaseClient.from('diet_logs').delete().eq('id', dietId);
+    }
+  } catch (e) {
+    console.error('Supabase diet delete error:', e);
   }
 }
 
@@ -2260,9 +2475,131 @@ function handleResetAppData() {
   }
 }
 
-function saveSupabaseSettings() {
+// --- 13. PIN 인증 & 프로필 전환 방어 & 체중 잠금해제 로직 ---
+let activeAuthAction = null; // 'unlock_weight' | 'switch_profile'
+let targetProfileForSwitch = null;
+let currentPinBuffer = '';
+
+function handleProfileSwitchClick(targetRole) {
+  if (store.data.currentRole === targetRole) return;
+
+  targetProfileForSwitch = targetRole;
+  activeAuthAction = 'switch_profile';
+
+  const roleName = targetRole === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+  const roleEmoji = targetRole === 'boyfriend' ? '🏃‍♂️' : '🐰';
+
+  openPinAuthModal(
+    `[${roleName}] 프로필 전환`,
+    `본인 인증을 위해 ${roleName}의 4자리 PIN을 입력하세요`,
+    roleEmoji
+  );
+}
+
+function requestWeightUnlock() {
+  const role = store.data.currentRole;
+  activeAuthAction = 'unlock_weight';
+
+  const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+  openPinAuthModal(
+    `[${roleName}] 체중 잠금해제`,
+    `체중 확인을 위해 본인의 4자리 PIN을 입력하세요`,
+    '🔒'
+  );
+}
+
+function lockWeightDisplay() {
+  isWeightUnlocked = false;
+  renderStatsScreen();
+}
+
+function openPinAuthModal(title, desc, icon = '🔒') {
+  document.getElementById('pin-auth-title').innerText = title;
+  document.getElementById('pin-auth-desc').innerText = desc;
+  document.getElementById('pin-auth-icon').innerText = icon;
+  currentPinBuffer = '';
+  updatePinDots();
+  openModal('modal-pin-auth');
+}
+
+function enterPinDigit(digit) {
+  if (currentPinBuffer.length < 4) {
+    currentPinBuffer += digit;
+    updatePinDots();
+    sfx.playSuccess();
+    if (currentPinBuffer.length === 4) {
+      setTimeout(validatePinAuth, 120);
+    }
+  }
+}
+
+function deletePinDigit() {
+  if (currentPinBuffer.length > 0) {
+    currentPinBuffer = currentPinBuffer.slice(0, -1);
+    updatePinDots();
+  }
+}
+
+function clearPinInput() {
+  currentPinBuffer = '';
+  updatePinDots();
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`pindot-${i}`);
+    if (dot) {
+      if (i < currentPinBuffer.length) {
+        dot.classList.add('filled');
+      } else {
+        dot.classList.remove('filled');
+      }
+    }
+  }
+}
+
+function validatePinAuth() {
+  const targetRole = activeAuthAction === 'switch_profile' ? targetProfileForSwitch : store.data.currentRole;
+  const correctPin = (store.data.pins && store.data.pins[targetRole]) || '1234';
+
+  if (currentPinBuffer === correctPin) {
+    closeModal('modal-pin-auth');
+    currentPinBuffer = '';
+    sfx.playSuccess();
+
+    if (activeAuthAction === 'switch_profile') {
+      store.data.currentRole = targetRole;
+      isWeightUnlocked = false; // 프로필 전환 시 체중은 즉시 잠금 상태로 유지
+      store.save();
+      createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+      renderHomeScreen();
+      if (currentTab === 'stats') renderStatsScreen();
+      if (currentTab === 'diet') renderDietScreen();
+      if (currentTab === 'missions') renderMissionsScreen();
+    } else if (activeAuthAction === 'unlock_weight') {
+      isWeightUnlocked = true;
+      renderStatsScreen();
+      createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 12);
+    }
+  } else {
+    sfx.playRest();
+    alert('비밀번호(PIN)가 일치하지 않습니다. 다시 입력해주세요! (초기 기본값: 1234)');
+    clearPinInput();
+  }
+}
+
+function saveAllAppSettings() {
   const url = document.getElementById('supabase-url-input').value.trim();
   const key = document.getElementById('supabase-key-input').value.trim();
+  const bfPin = document.getElementById('pin-input-bf').value.trim();
+  const gfPin = document.getElementById('pin-input-gf').value.trim();
+
+  if (bfPin && bfPin.length === 4) {
+    store.data.pins.boyfriend = bfPin;
+  }
+  if (gfPin && gfPin.length === 4) {
+    store.data.pins.girlfriend = gfPin;
+  }
 
   store.data.supabase.url = url;
   store.data.supabase.anonKey = key;
@@ -2270,34 +2607,23 @@ function saveSupabaseSettings() {
   store.save();
 
   initSupabase();
-  alert('Supabase 연동이 저장되었습니다! 이제 두 폰 간 실시간 동기화가 이루어집니다. ☁️');
+  alert('설정과 보안 비밀번호(PIN)가 안전하게 저장되었습니다! 🔒✨');
   closeModal('modal-settings');
 }
 
-// --- 13. Application Initialization ---
+// --- 14. Application Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
   initSupabase();
-  // 1. 유저 역할 전환 바 이벤트 바인딩
-  const bfBtn = document.getElementById('switch-bf');
-  const gfBtn = document.getElementById('switch-gf');
-  if (bfBtn) {
-    bfBtn.addEventListener('click', () => {
-      store.data.currentRole = 'boyfriend';
-      store.save();
-      renderHomeScreen();
-      if (currentTab === 'stats') renderStatsScreen();
-      if (currentTab === 'missions') renderMissionsScreen();
-    });
-  }
-  if (gfBtn) {
-    gfBtn.addEventListener('click', () => {
-      store.data.currentRole = 'girlfriend';
-      store.save();
-      renderHomeScreen();
-      if (currentTab === 'stats') renderStatsScreen();
-      if (currentTab === 'missions') renderMissionsScreen();
-    });
-  }
+
+  // 설정 모달 열릴 때 초기값 채우기
+  const pinBfInput = document.getElementById('pin-input-bf');
+  const pinGfInput = document.getElementById('pin-input-gf');
+  const suUrlInput = document.getElementById('supabase-url-input');
+  const suKeyInput = document.getElementById('supabase-key-input');
+  if (pinBfInput) pinBfInput.value = (store.data.pins && store.data.pins.boyfriend) || '1234';
+  if (pinGfInput) pinGfInput.value = (store.data.pins && store.data.pins.girlfriend) || '1234';
+  if (suUrlInput) suUrlInput.value = store.data.supabase.url || '';
+  if (suKeyInput) suKeyInput.value = store.data.supabase.anonKey || '';
 
   // 2. 탭 내비게이션 바인딩
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
