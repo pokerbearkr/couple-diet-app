@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=3.8">
+  <link rel="stylesheet" href="style.css?v=3.9">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -78,10 +78,35 @@
       align-items: center !important;
       justify-content: center !important;
       z-index: 99999 !important;
-      padding: 20px !important;
+      padding: 16px !important;
+      box-sizing: border-box !important;
     }
     .modal-overlay.active {
       display: flex !important;
+    }
+    .modal-box {
+      background: #FFF !important;
+      border-radius: var(--radius-lg) !important;
+      padding: 20px !important;
+      width: 100% !important;
+      max-width: 380px !important;
+      max-height: 85vh !important;
+      max-height: 85dvh !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+      box-sizing: border-box !important;
+    }
+    .modal-box::-webkit-scrollbar {
+      width: 5px !important;
+    }
+    .modal-box::-webkit-scrollbar-track {
+      background: #F8F9FA !important;
+      border-radius: 4px !important;
+    }
+    .modal-box::-webkit-scrollbar-thumb {
+      background: #E0E0E0 !important;
+      border-radius: 4px !important;
     }
   </style>
 
@@ -573,73 +598,84 @@
     <!-- 모달 1: 앱 설정 & 커플 코드 & 무료 Supabase 연동 -->
     <div id="modal-settings" class="modal-overlay">
       <div class="modal-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-          <h3 style="font-size:1.1rem; color:var(--text-main);">⚙️ 커플 앱 설정</h3>
-          <button class="icon-btn" onclick="closeModal('modal-settings')" style="border:none;">✕</button>
+        <!-- 스티키 헤더 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; position:sticky; top:-20px; background:#FFF; padding-top:4px; padding-bottom:10px; z-index:10; border-bottom:1px solid #F0F0F0; margin-top:-4px;">
+          <h3 style="font-size:1.05rem; color:var(--text-main); font-weight:800; margin:0;">⚙️ 커플 앱 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-settings')" style="border:none; width:30px; height:30px; font-size:1rem; cursor:pointer;">✕</button>
         </div>
 
-        <!-- 이 기기의 기본 사용자 고정 -->
-        <div style="margin-bottom:14px; background:#F8F9FA; border:1px solid #ECEFF1; border-radius:12px; padding:12px;">
-          <label style="font-size:0.8rem; font-weight:800; color:var(--text-main); display:block; margin-bottom:4px;">📱 이 스마트폰의 기본 사용자</label>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">이 기기의 주인을 선택해두면 항상 내 프로필로 시작됩니다.</div>
-          <div style="display:flex; gap:8px;">
-            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
+        <!-- 1. 이 기기의 기본 사용자 고정 -->
+        <div style="margin-bottom:12px; background:#F8F9FA; border:1px solid #ECEFF1; border-radius:12px; padding:10px 12px;">
+          <label style="font-size:0.78rem; font-weight:800; color:var(--text-main); display:block; margin-bottom:3px;">📱 이 스마트폰의 기본 사용자</label>
+          <div style="font-size:0.68rem; color:var(--text-muted); margin-bottom:6px;">선택해두면 항상 내 프로필로 시작됩니다.</div>
+          <div style="display:flex; gap:6px;">
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:8px 10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
               <input type="radio" name="device-owner-role" value="boyfriend" onchange="setDeviceDefaultOwner('boyfriend')" />
-              <span style="font-size:0.82rem; font-weight:700; color:#1976D2;">🏃‍♂️ 오동원 (남친)</span>
+              <span style="font-size:0.8rem; font-weight:700; color:#1976D2;">🏃‍♂️ 오동원 (남친)</span>
             </label>
-            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
+            <label style="flex:1; display:flex; align-items:center; gap:6px; padding:8px 10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer; background:#FFF;">
               <input type="radio" name="device-owner-role" value="girlfriend" onchange="setDeviceDefaultOwner('girlfriend')" />
-              <span style="font-size:0.82rem; font-weight:700; color:#D81B60;">🐰 김해솔 (여친)</span>
+              <span style="font-size:0.8rem; font-weight:700; color:#D81B60;">🐰 김해솔 (여친)</span>
             </label>
           </div>
         </div>
 
-        <!-- 내 비밀번호(PIN) 변경 (상대방 PIN 절대 노출 불가) -->
-        <div style="margin-bottom:14px; background:#FFF5F7; border:1px solid #FFE4E8; border-radius:12px; padding:12px;">
-          <div id="my-pin-setting-header" style="font-size:0.82rem; font-weight:800; color:#D81B60; margin-bottom:4px;">🔒 내 4자리 비밀번호(PIN) 변경</div>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">
-            상대방의 비밀번호는 볼 수 없으며, 본인 비밀번호만 현재 PIN 인증 후 변경할 수 있습니다.
+        <!-- 2. 내 비밀번호(PIN) 변경 (상대방 PIN 절대 노출 불가) -->
+        <div style="margin-bottom:12px; background:#FFF5F7; border:1px solid #FFE4E8; border-radius:12px; padding:10px 12px;">
+          <div id="my-pin-setting-header" style="font-size:0.78rem; font-weight:800; color:#D81B60; margin-bottom:3px;">🔒 내 4자리 비밀번호(PIN) 변경</div>
+          <div style="font-size:0.68rem; color:var(--text-muted); margin-bottom:6px;">
+            상대방 비밀번호는 볼 수 없으며, 본인 PIN만 변경 가능합니다.
           </div>
           
-          <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             <div>
-              <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">현재 비밀번호 4자리</label>
-              <input type="password" maxlength="4" id="pin-current-input" class="input-field" placeholder="현재 PIN (기본: 1234)" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">현재 비밀번호 4자리</label>
+              <input type="password" maxlength="4" id="pin-current-input" class="input-field" placeholder="현재 PIN (기본: 1234)" style="width:100%; text-align:center; font-weight:800; font-size:0.85rem; padding:8px;" />
             </div>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:6px;">
               <div style="flex:1;">
-                <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 비밀번호 4자리</label>
-                <input type="password" maxlength="4" id="pin-new-input" class="input-field" placeholder="새 PIN 4자리" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+                <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 PIN</label>
+                <input type="password" maxlength="4" id="pin-new-input" class="input-field" placeholder="새 PIN 4자리" style="width:100%; text-align:center; font-weight:800; font-size:0.85rem; padding:8px;" />
               </div>
               <div style="flex:1;">
-                <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 비밀번호 확인</label>
-                <input type="password" maxlength="4" id="pin-confirm-input" class="input-field" placeholder="한 번 더 입력" style="width:100%; text-align:center; font-weight:800; font-size:0.9rem;" />
+                <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">새 PIN 확인</label>
+                <input type="password" maxlength="4" id="pin-confirm-input" class="input-field" placeholder="확인 4자리" style="width:100%; text-align:center; font-weight:800; font-size:0.85rem; padding:8px;" />
               </div>
             </div>
-            <button class="btn-primary" style="padding:10px; font-size:0.8rem; background:linear-gradient(135deg, #FF69B4, #E91E63); margin-top:2px;" onclick="changeMyPin()">내 비밀번호 변경하기 🔑</button>
+            <button class="btn-primary" style="padding:8px 10px; font-size:0.78rem; background:linear-gradient(135deg, #FF69B4, #E91E63); margin-top:2px;" onclick="changeMyPin()">내 비밀번호 변경하기 🔑</button>
           </div>
         </div>
 
-        <div style="margin-bottom:14px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">커플 방 코드</label>
-          <input type="text" id="couple-code-input" class="input-field" value="LOVE-2026" style="width:100%; font-weight:700;" readonly />
-          <div style="font-size:0.7rem; color:var(--text-light); margin-top:2px;">이 코드로 여자친구와 실시간으로 연결됩니다.</div>
-        </div>
+        <!-- 3. 클라우드 DB 및 커플 방 코드 (아코디언 접기) -->
+        <details style="margin-bottom:12px; background:#FAFAFA; border:1px solid #ECEFF1; border-radius:12px; padding:10px 12px;">
+          <summary style="font-size:0.78rem; font-weight:800; color:var(--text-main); cursor:pointer; outline:none; user-select:none;">
+            ☁️ 클라우드 DB 및 커플 코드 연동 설정 ▾
+          </summary>
+          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+            <div>
+              <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">커플 방 코드</label>
+              <input type="text" id="couple-code-input" class="input-field" value="LOVE-2026" style="width:100%; font-weight:700; font-size:0.82rem; padding:8px;" readonly />
+            </div>
+            <div>
+              <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">Supabase Project URL</label>
+              <input type="text" id="supabase-url-input" class="input-field" placeholder="https://your-project.supabase.co" style="width:100%; font-size:0.78rem; padding:8px;" />
+            </div>
+            <div>
+              <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:2px;">Supabase Anon Key</label>
+              <input type="password" id="supabase-key-input" class="input-field" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." style="width:100%; font-size:0.78rem; padding:8px;" />
+              <div style="font-size:0.68rem; color:#2E7D32; margin-top:2px;">* 안전하게 클라우드 실시간 동기화가 활성화됩니다.</div>
+            </div>
+          </div>
+        </details>
 
-        <div style="margin-bottom:14px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Supabase Project URL</label>
-          <input type="text" id="supabase-url-input" class="input-field" placeholder="https://your-project.supabase.co" style="width:100%; font-size:0.8rem;" />
+        <!-- 4. 액션 버튼 영역 -->
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:2px;">
+          <button class="btn-primary" style="width:100%; padding:12px; font-size:0.85rem;" onclick="saveAllAppSettings()">설정 저장하기</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-primary" style="flex:1; padding:8px 6px; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; font-size:0.72rem; box-shadow:none;" onclick="handleResetWeightData()">⚖️ 체중만 초기화</button>
+            <button class="btn-primary" style="flex:1; padding:8px 6px; background:#ECEFF1; color:#546E7A; font-size:0.72rem; box-shadow:none;" onclick="handleResetAppData()">🧹 전체 초기화</button>
+          </div>
         </div>
-
-        <div style="margin-bottom:16px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Supabase Anon Key</label>
-          <input type="password" id="supabase-key-input" class="input-field" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." style="width:100%; font-size:0.8rem;" />
-          <div style="font-size:0.7rem; color:#2E7D32; margin-top:2px;">* 안전하게 클라우드 실시간 동기화가 활성화됩니다.</div>
-        </div>
-
-        <button class="btn-primary" style="width:100%; padding:14px; margin-bottom:10px;" onclick="saveAllAppSettings()">설정 저장하기</button>
-        <button class="btn-primary" style="width:100%; padding:10px; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; font-size:0.8rem; box-shadow:none; margin-bottom:8px;" onclick="handleResetWeightData()">⚖️ 체중 기록만 전체 삭제/초기화</button>
-        <button class="btn-primary" style="width:100%; padding:10px; background:#ECEFF1; color:#546E7A; font-size:0.8rem; box-shadow:none;" onclick="handleResetAppData()">🧹 앱 데이터 전체 비우기 (초기화)</button>
       </div>
     </div>
 
@@ -892,6 +928,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=3.8"></script>
+  <script src="app.js?v=3.9"></script>
 </body>
 </html>
