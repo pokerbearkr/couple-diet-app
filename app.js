@@ -696,9 +696,17 @@ function renderMissionsScreen() {
             <div class="mission-bar-gf" style="width: ${gfPct / 2}%;"></div>
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:6px;">
             <span class="penalty-tag">벌칙: ${m.penalty}</span>
-            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem;" onclick="incrementMission('${m.id}')">+1 달성</button>
+            <div style="display:flex; gap:4px; align-items:center;">
+              ${m.target >= 20 ? `
+                <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 10)">+10</button>
+                <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 50)">+50</button>
+              ` : `
+                <button class="btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="incrementMission('${m.id}', 1)">+1 ${m.unit}</button>
+              `}
+              <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="promptCustomMissionAmount('${m.id}')">✏️ 직접입력</button>
+            </div>
           </div>
         `;
         missionContainer.appendChild(card);
@@ -807,17 +815,37 @@ function deleteMission(missionId) {
   }
 }
 
-function incrementMission(missionId) {
+function incrementMission(missionId, amount = 1) {
   const m = store.data.missions.find(item => item.id === missionId);
   if (!m) return;
 
   const role = store.data.currentRole;
-  if (role === 'boyfriend') m.bfProgress++;
-  else m.gfProgress++;
+  if (role === 'boyfriend') {
+    m.bfProgress = Math.max(0, m.bfProgress + amount);
+  } else {
+    m.gfProgress = Math.max(0, m.gfProgress + amount);
+  }
 
   store.save();
   sfx.playSuccess();
+  createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 10);
   renderMissionsScreen();
+}
+
+function promptCustomMissionAmount(missionId) {
+  const m = store.data.missions.find(item => item.id === missionId);
+  if (!m) return;
+
+  const role = store.data.currentRole;
+  const currentVal = role === 'boyfriend' ? m.bfProgress : m.gfProgress;
+  const input = prompt(`[${m.title}]\n추가할 수량을 입력하세요 (현재: ${currentVal}/${m.target}${m.unit})`, '20');
+
+  if (input !== null) {
+    const amount = parseInt(input, 10);
+    if (!isNaN(amount) && amount !== 0) {
+      incrementMission(missionId, amount);
+    }
+  }
 }
 
 // --- 응원 메시지 직접 입력 및 프리셋 전송 ---
