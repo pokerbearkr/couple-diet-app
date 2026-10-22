@@ -428,23 +428,194 @@ function toggleTodayAttendance(e) {
   renderHomeScreen();
 }
 
-// --- 7. Feature 2 & 3: Stats (Steps & Weight) Logic ---
+// --- 7. Custom In-App Date Picker & State ---
+let selectedStepDate = getTodayStr();
+let selectedWeightDate = getTodayStr();
+let selectedDietDate = getTodayStr();
+let selectedDietFilterDate = '';
+
+let activePickerTarget = 'diet'; // 'step' | 'weight' | 'diet' | 'filter'
+let pickerMonth = new Date();
+
+function formatDatePretty(dateStr) {
+  if (!dateStr) return '모든 날짜';
+  const today = getTodayStr();
+  const yesterday = getDateOffsetStr(-1);
+  if (dateStr === today) return `오늘 (${formatKoreanDate(dateStr)})`;
+  if (dateStr === yesterday) return `어제 (${formatKoreanDate(dateStr)})`;
+  return formatKoreanDate(dateStr);
+}
+
+function openCustomDatePicker(target) {
+  activePickerTarget = target;
+  let currentDate = getTodayStr();
+  if (target === 'step') currentDate = selectedStepDate;
+  if (target === 'weight') currentDate = selectedWeightDate;
+  if (target === 'diet') currentDate = selectedDietDate;
+  if (target === 'filter') currentDate = selectedDietFilterDate || getTodayStr();
+
+  const [y, m] = currentDate.split('-');
+  pickerMonth = new Date(parseInt(y), parseInt(m) - 1, 1);
+
+  const titleMap = {
+    step: '👟 걸음 기록 날짜 선택',
+    weight: '⚖️ 체중 측정 날짜 선택',
+    diet: '🥗 식사한 날짜 선택',
+    filter: '🔍 식단 모아볼 날짜 선택'
+  };
+  const titleEl = document.getElementById('modal-datepicker-title');
+  if (titleEl) titleEl.innerText = titleMap[target] || '📅 날짜 선택';
+
+  renderPickerCalendar();
+  openModal('modal-custom-datepicker');
+}
+
+function renderPickerCalendar() {
+  const container = document.getElementById('picker-days-grid');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const y = pickerMonth.getFullYear();
+  const m = pickerMonth.getMonth();
+
+  const monthLabel = document.getElementById('picker-month-label');
+  if (monthLabel) monthLabel.innerText = `${y}년 ${m + 1}월`;
+
+  const firstDay = new Date(y, m, 1).getDay();
+  const lastDate = new Date(y, m + 1, 0).getDate();
+  const todayStr = getTodayStr();
+
+  let targetDate = '';
+  if (activePickerTarget === 'step') targetDate = selectedStepDate;
+  if (activePickerTarget === 'weight') targetDate = selectedWeightDate;
+  if (activePickerTarget === 'diet') targetDate = selectedDietDate;
+  if (activePickerTarget === 'filter') targetDate = selectedDietFilterDate;
+
+  // 빈 칸
+  for (let i = 0; i < firstDay; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'calendar-cell';
+    blank.style.background = 'transparent';
+    blank.style.borderColor = 'transparent';
+    container.appendChild(blank);
+  }
+
+  // 날짜 타일
+  for (let d = 1; d <= lastDate; d++) {
+    const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell';
+
+    if (dateStr === targetDate) {
+      cell.classList.add('stamp-both'); // 선택된 날짜는 핑크 하이라이트
+    } else if (dateStr === todayStr) {
+      cell.classList.add('today');
+    }
+
+    const dateNum = document.createElement('span');
+    dateNum.className = 'calendar-date-num';
+    dateNum.innerText = d;
+    cell.appendChild(dateNum);
+
+    const iconBox = document.createElement('div');
+    iconBox.className = 'calendar-cell-icon';
+    if (dateStr === targetDate) {
+      iconBox.innerHTML = '✨';
+    }
+    cell.appendChild(iconBox);
+
+    cell.addEventListener('click', () => {
+      selectDateFromPicker(dateStr);
+    });
+
+    container.appendChild(cell);
+  }
+}
+
+function movePickerMonth(delta) {
+  pickerMonth.setMonth(pickerMonth.getMonth() + delta);
+  renderPickerCalendar();
+}
+
+function jumpPickerToToday() {
+  pickerMonth = new Date();
+  selectDateFromPicker(getTodayStr());
+}
+
+function selectDateFromPicker(dateStr) {
+  sfx.playSuccess();
+  if (activePickerTarget === 'step') {
+    selectedStepDate = dateStr;
+    updateStepUI();
+  } else if (activePickerTarget === 'weight') {
+    selectedWeightDate = dateStr;
+    updateWeightUI();
+  } else if (activePickerTarget === 'diet') {
+    selectedDietDate = dateStr;
+    updateDietInputUI();
+  } else if (activePickerTarget === 'filter') {
+    selectedDietFilterDate = dateStr;
+    renderDietScreen();
+  }
+
+  closeModal('modal-custom-datepicker');
+}
+
+// 퀵 날짜 셋팅 헬퍼
+function setQuickStepDate(offset) {
+  selectedStepDate = getDateOffsetStr(offset);
+  sfx.playSuccess();
+  updateStepUI();
+}
+function setQuickWeightDate(offset) {
+  selectedWeightDate = getDateOffsetStr(offset);
+  sfx.playSuccess();
+  updateWeightUI();
+}
+function setQuickDietDate(offset) {
+  selectedDietDate = getDateOffsetStr(offset);
+  sfx.playSuccess();
+  updateDietInputUI();
+}
+function setQuickDietFilter(offset) {
+  selectedDietFilterDate = getDateOffsetStr(offset);
+  sfx.playSuccess();
+  renderDietScreen();
+}
+
+function updateStepUI() {
+  const lbl = document.getElementById('step-date-label');
+  if (lbl) lbl.innerText = formatDatePretty(selectedStepDate);
+
+  const role = store.data.currentRole;
+  const data = store.data.stepLogs[selectedStepDate] || { boyfriend: 0, girlfriend: 0 };
+  const stepInput = document.getElementById('step-input');
+  if (stepInput) stepInput.value = data[role] > 0 ? data[role] : '';
+}
+
+function updateWeightUI() {
+  const lbl = document.getElementById('weight-date-label');
+  if (lbl) lbl.innerText = formatDatePretty(selectedWeightDate);
+
+  const role = store.data.currentRole;
+  const list = store.data.weightLogs[role] || [];
+  const existing = list.find(item => item.date === selectedWeightDate);
+  const weightInput = document.getElementById('weight-input');
+  if (weightInput) weightInput.value = existing ? existing.weight : '';
+}
+
+function updateDietInputUI() {
+  const lbl = document.getElementById('diet-date-label');
+  if (lbl) lbl.innerText = formatDatePretty(selectedDietDate);
+}
+
+// --- 8. Stats Screen Rendering ---
 function renderStatsScreen() {
   const role = store.data.currentRole;
   const partnerRole = role === 'boyfriend' ? 'girlfriend' : 'boyfriend';
-  const today = getTodayStr();
 
-  // 날짜 선택기 기본값 세팅
-  const stepDateInput = document.getElementById('step-date-input');
-  if (stepDateInput && !stepDateInput.value) stepDateInput.value = today;
-
-  const weightDateInput = document.getElementById('weight-date-input');
-  if (weightDateInput && !weightDateInput.value) weightDateInput.value = today;
-
-  // 선택된 날짜의 걸음 수 표시
-  onStepDateChange();
-
-  // 주간 걸음 수 비교 차트 (Canvas)
+  updateStepUI();
+  updateWeightUI();
   drawWeeklyStepChart();
 
   // 체중 기록 섹션 (프라이버시 중심)
@@ -492,44 +663,18 @@ function renderStatsScreen() {
   }
 }
 
-function onStepDateChange() {
-  const dateInput = document.getElementById('step-date-input');
-  const targetDate = (dateInput && dateInput.value) || getTodayStr();
-  const role = store.data.currentRole;
-
-  const data = store.data.stepLogs[targetDate] || { boyfriend: 0, girlfriend: 0 };
-  const stepInput = document.getElementById('step-input');
-  if (stepInput) {
-    stepInput.value = data[role] > 0 ? data[role] : '';
-  }
-}
-
-function onWeightDateChange() {
-  const dateInput = document.getElementById('weight-date-input');
-  const targetDate = (dateInput && dateInput.value) || getTodayStr();
-  const role = store.data.currentRole;
-
-  const list = store.data.weightLogs[role] || [];
-  const existing = list.find(item => item.date === targetDate);
-  const weightInput = document.getElementById('weight-input');
-  if (weightInput) {
-    weightInput.value = existing ? existing.weight : '';
-  }
-}
-
 function saveStepLog() {
   const val = parseInt(document.getElementById('step-input').value, 10);
   if (isNaN(val) || val < 0) return alert('올바른 걸음 수를 입력해주세요!');
 
-  const dateInput = document.getElementById('step-date-input');
-  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+  const targetDate = selectedStepDate || getTodayStr();
 
   if (!store.data.stepLogs[targetDate]) store.data.stepLogs[targetDate] = { boyfriend: 0, girlfriend: 0 };
   store.data.stepLogs[targetDate][store.data.currentRole] = val;
   store.save();
 
   sfx.playSuccess();
-  alert(`${formatKoreanDate(targetDate)} 걸음 수가 저장되었습니다! 👟`);
+  alert(`${formatDatePretty(targetDate)} 걸음 수가 저장되었습니다! 👟`);
   renderStatsScreen();
 }
 
@@ -538,8 +683,7 @@ function saveWeightLog() {
   if (isNaN(val) || val <= 20 || val >= 250) return alert('올바른 체중(kg)을 입력해주세요!');
 
   const role = store.data.currentRole;
-  const dateInput = document.getElementById('weight-date-input');
-  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+  const targetDate = selectedWeightDate || getTodayStr();
   const list = store.data.weightLogs[role];
 
   let baseline = val;
@@ -557,7 +701,7 @@ function saveWeightLog() {
   store.save();
   sfx.playSuccess();
   document.getElementById('weight-input').value = '';
-  alert(`${formatKoreanDate(targetDate)} 비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒`);
+  alert(`${formatDatePretty(targetDate)} 비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒`);
   renderStatsScreen();
 }
 
@@ -625,24 +769,23 @@ function renderDietScreen() {
   if (!container) return;
   container.innerHTML = '';
 
-  // 업로드 날짜 선택기 기본값 세팅
-  const dietDateInput = document.getElementById('diet-date-input');
-  if (dietDateInput && !dietDateInput.value) dietDateInput.value = getTodayStr();
+  updateDietInputUI();
 
-  // 날짜 필터 확인
-  const filterInput = document.getElementById('diet-filter-date');
-  const filterDate = filterInput ? filterInput.value : '';
+  const filterLabel = document.getElementById('diet-filter-label');
+  if (filterLabel) {
+    filterLabel.innerText = selectedDietFilterDate ? formatDatePretty(selectedDietFilterDate) : '모든 날짜 보기';
+  }
 
   let logs = [...store.data.dietLogs].reverse();
 
-  if (filterDate) {
-    logs = logs.filter(item => item.date === filterDate);
+  if (selectedDietFilterDate) {
+    logs = logs.filter(item => item.date === selectedDietFilterDate);
   }
 
   if (logs.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center; padding: 30px 10px; color: var(--text-muted); font-size: 0.85rem;">
-        ${filterDate ? `📅 <b>${formatKoreanDate(filterDate)}</b>에 등록된 식단 일기가 없어요.` : `🥗 아직 등록된 식단 일기가 없어요.<br>먹은 맛있는 식사를 사진과 함께 남겨보세요!`}
+      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: 0.85rem;">
+        ${selectedDietFilterDate ? `📅 <b>${formatDatePretty(selectedDietFilterDate)}</b>에 등록된 식단 일기가 없어요.` : `🥗 아직 등록된 식단 일기가 없어요.<br>먹은 맛있는 식사를 사진과 함께 남겨보세요!`}
       </div>
     `;
     return;
@@ -709,19 +852,18 @@ function handleDietPhotoUpload(e) {
 }
 
 function clearDietDateFilter() {
-  const filterInput = document.getElementById('diet-filter-date');
-  if (filterInput) filterInput.value = '';
+  selectedDietFilterDate = '';
+  sfx.playSuccess();
   renderDietScreen();
 }
 
 function saveDietLog() {
   const memo = document.getElementById('diet-memo-input').value.trim();
   if (!currentPhotoDataUrl && !memo) {
-    return alert('식단 사진을 등록하거나 한 줄 메모를 입력해주세요!');
+    return alert('식단 사진을 등록하거나 한 줄 소감을 입력해주세요!');
   }
 
-  const dateInput = document.getElementById('diet-date-input');
-  const targetDate = (dateInput && dateInput.value) || getTodayStr();
+  const targetDate = selectedDietDate || getTodayStr();
 
   const newLog = {
     id: 'd_' + Date.now(),
@@ -737,13 +879,15 @@ function saveDietLog() {
   store.save();
 
   sfx.playSuccess();
+  createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 16);
+
   // 초기화
   currentPhotoDataUrl = null;
   document.getElementById('diet-memo-input').value = '';
   document.getElementById('diet-preview-img').style.display = 'none';
   document.getElementById('diet-upload-text').style.display = 'block';
 
-  alert(`${formatKoreanDate(targetDate)} 식단 사진 일기가 등록되었습니다! 🥗`);
+  alert(`${formatDatePretty(targetDate)} 식단 일기가 등록되었습니다! 🥗`);
   renderDietScreen();
 }
 
