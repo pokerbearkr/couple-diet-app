@@ -254,80 +254,206 @@ body {
   50% { transform: translateY(-4px); }
 }
 
-/* 커플 달력 */
+/* ========================================================
+   프리미엄 감성 커플 달력 (Between & Sumone 감성)
+   ======================================================== */
+.calendar-card {
+  background: #FFFDFB;
+  border: 1.5px solid #F2E9E4;
+  border-radius: var(--radius-lg);
+  padding: 18px 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 10px 30px rgba(230, 205, 195, 0.18);
+  position: relative;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 0 4px;
+}
+
+.calendar-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-month-text {
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+}
+
+.calendar-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-nav-btn {
+  background: #FFF;
+  border: 1px solid #EADCD4;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.cal-nav-btn:active {
+  background: var(--soft-rose);
+  transform: scale(0.9);
+}
+
+.cal-today-pill {
+  background: #FFF;
+  border: 1px solid #EADCD4;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-heart);
+  cursor: pointer;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
 }
 
 .calendar-day-header {
   text-align: center;
   font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-light);
-  padding-bottom: 6px;
+  font-weight: 800;
+  padding-bottom: 8px;
 }
 
+/* 개별 날짜 타일 */
 .calendar-cell {
   aspect-ratio: 1;
-  background: #FAFAFA;
-  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid #F0E6E0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 4px;
-  border: 1px solid transparent;
+  padding: 4px 2px;
   position: relative;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.calendar-cell:active {
+  transform: scale(0.93);
 }
 
 .calendar-cell.today {
-  border-color: var(--primary-pink);
-  background: #FFF9FA;
-  font-weight: 800;
+  border: 2px solid var(--accent-heart) !important;
+  box-shadow: 0 2px 8px rgba(255, 94, 126, 0.25);
+  font-weight: 900;
 }
 
 .calendar-date-num {
   font-size: 0.72rem;
-  color: var(--text-muted);
+  font-weight: 700;
+  color: #7A7585;
+  line-height: 1;
 }
 
-.calendar-stamps {
+/* 도장 상태별 타일 디자인 */
+.calendar-cell.stamp-both {
+  background: linear-gradient(135deg, #FFE8EC, #FFD1DA) !important;
+  border: 1.5px solid #FF85A1 !important;
+  box-shadow: 0 3px 10px rgba(255, 133, 161, 0.25);
+}
+
+.calendar-cell.stamp-both .calendar-date-num {
+  color: #D81B60;
+  font-weight: 800;
+}
+
+.calendar-cell.stamp-dongwon {
+  background: #EBF3FC !important;
+  border: 1px solid #BBDEFB !important;
+}
+
+.calendar-cell.stamp-dongwon .calendar-date-num {
+  color: #1976D2;
+}
+
+.calendar-cell.stamp-haesol {
+  background: #FFF0F3 !important;
+  border: 1px solid #FFCDD2 !important;
+}
+
+.calendar-cell.stamp-haesol .calendar-date-num {
+  color: #D81B60;
+}
+
+.calendar-cell-icon {
+  font-size: 1rem;
+  line-height: 1;
   display: flex;
-  gap: 2px;
   align-items: center;
   justify-content: center;
-  height: 18px;
 }
 
-.stamp-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.stamp-bf {
-  background: var(--bf-color);
-  box-shadow: 0 0 4px rgba(100, 181, 246, 0.5);
-}
-
-.stamp-gf {
-  background: var(--gf-color);
-  box-shadow: 0 0 4px rgba(255, 133, 161, 0.5);
-}
-
-.stamp-heart {
-  font-size: 1rem;
+.stamp-heart-pulse {
   animation: heartPulse 1.4s infinite;
+  display: inline-block;
 }
 
 @keyframes heartPulse {
   0% { transform: scale(1); }
-  50% { transform: scale(1.25); }
+  50% { transform: scale(1.22); }
   100% { transform: scale(1); }
+}
+
+/* 달력 하단 이번달 달성률 캡슐 */
+.calendar-month-stats-banner {
+  background: linear-gradient(135deg, #FFF5F7, #FFF9FA);
+  border: 1px solid #FFE2E7;
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-heart);
+}
+
+.calendar-legend-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #FFF;
+  border: 1px solid #EFE5DE;
+  padding: 3px 8px;
+  border-radius: 20px;
 }
 
 /* 스트릭 & 달성률 위젯 */

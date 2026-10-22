@@ -302,6 +302,11 @@ function updateStreakAndRate() {
   if (weeklyRateEl) weeklyRateEl.innerText = `${weeklyRate}% (${weekSuccessCount}/7일)`;
 }
 
+function jumpToCurrentMonth() {
+  currentCalendarMonth = new Date();
+  renderCalendar();
+}
+
 function renderCalendar() {
   const container = document.getElementById('calendar-days-container');
   if (!container) return;
@@ -317,55 +322,88 @@ function renderCalendar() {
   const lastDate = new Date(y, m + 1, 0).getDate();
   const todayStr = getTodayStr();
 
+  let monthHeartsCount = 0;
+
   // 빈 칸 추가
   for (let i = 0; i < firstDay; i++) {
     const blank = document.createElement('div');
     blank.className = 'calendar-cell';
     blank.style.background = 'transparent';
+    blank.style.borderColor = 'transparent';
+    blank.style.cursor = 'default';
     container.appendChild(blank);
   }
 
-  // 날짜 채우기
+  // 날짜 타일 렌더링
   for (let d = 1; d <= lastDate; d++) {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const cell = document.createElement('div');
-    cell.className = 'calendar-cell' + (dateStr === todayStr ? ' today' : '');
+    cell.className = 'calendar-cell';
+
+    if (dateStr === todayStr) {
+      cell.classList.add('today');
+    }
 
     const dateNum = document.createElement('span');
     dateNum.className = 'calendar-date-num';
     dateNum.innerText = d;
     cell.appendChild(dateNum);
 
-    const stampsBox = document.createElement('div');
-    stampsBox.className = 'calendar-stamps';
+    const iconBox = document.createElement('div');
+    iconBox.className = 'calendar-cell-icon';
 
     const att = store.data.attendance[dateStr];
     if (att) {
       if (att.boyfriend && att.girlfriend) {
-        // 둘 다 완료 -> 💖 반짝이는 하트!
-        const heart = document.createElement('span');
-        heart.className = 'stamp-heart';
-        heart.innerText = '💖';
-        stampsBox.appendChild(heart);
-      } else {
-        if (att.boyfriend) {
-          const bfDot = document.createElement('span');
-          bfDot.className = 'stamp-dot stamp-bf';
-          bfDot.title = '오동원 운동 완료';
-          stampsBox.appendChild(bfDot);
-        }
-        if (att.girlfriend) {
-          const gfDot = document.createElement('span');
-          gfDot.className = 'stamp-dot stamp-gf';
-          gfDot.title = '김해솔 운동 완료';
-          stampsBox.appendChild(gfDot);
-        }
+        // 둘 다 완료 -> 💖
+        monthHeartsCount++;
+        cell.classList.add('stamp-both');
+        iconBox.innerHTML = '<span class="stamp-heart-pulse">💖</span>';
+      } else if (att.boyfriend) {
+        cell.classList.add('stamp-dongwon');
+        iconBox.innerHTML = '🏃‍♂️';
+      } else if (att.girlfriend) {
+        cell.classList.add('stamp-haesol');
+        iconBox.innerHTML = '🐰';
       }
     }
 
-    cell.appendChild(stampsBox);
+    cell.appendChild(iconBox);
+
+    // 날짜 타일 클릭 시 출석 토글 (과거 날짜도 도장 찍기/취소 지원)
+    cell.addEventListener('click', (e) => {
+      toggleDateAttendance(dateStr, e);
+    });
+
     container.appendChild(cell);
   }
+
+  // 이번 달 통계 캡슐 업데이트
+  const monthHeartsEl = document.getElementById('calendar-month-hearts');
+  if (monthHeartsEl) {
+    monthHeartsEl.innerHTML = `💖 ${monthHeartsCount}일 달성!`;
+  }
+}
+
+function toggleDateAttendance(dateStr, e) {
+  const role = store.data.currentRole;
+  if (!store.data.attendance[dateStr]) {
+    store.data.attendance[dateStr] = { boyfriend: false, girlfriend: false, workoutType: '일반 운동' };
+  }
+
+  const currentVal = store.data.attendance[dateStr][role];
+  const newVal = !currentVal;
+  store.data.attendance[dateStr][role] = newVal;
+  store.save();
+
+  if (newVal) {
+    sfx.playSuccess();
+    if (e) createFloatingHearts(e.clientX || window.innerWidth / 2, e.clientY || 200, 16);
+    checkRewardBoxUnlocks();
+  }
+
+  syncAttendanceToSupabase(dateStr, role, newVal);
+  renderHomeScreen();
 }
 
 function toggleTodayAttendance(e) {

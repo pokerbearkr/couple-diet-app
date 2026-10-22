@@ -77,27 +77,29 @@
           </div>
         </div>
 
-        <!-- 커플 달력 카드 -->
-        <div class="card">
-          <div class="card-title-row">
-            <div class="card-title">
-              <span>📅</span> <span id="calendar-month-label">2025년 2월</span>
+        <!-- 감성 커플 달력 카드 -->
+        <div class="calendar-card">
+          <div class="calendar-header">
+            <div class="calendar-title-box">
+              <span style="font-size:1.15rem;">📅</span>
+              <span id="calendar-month-label" class="calendar-month-text">2026년 2월</span>
             </div>
-            <div style="display:flex; gap:4px;">
-              <button id="btn-prev-month" class="icon-btn" style="width:28px;height:28px;font-size:0.8rem;">◀</button>
-              <button id="btn-next-month" class="icon-btn" style="width:28px;height:28px;font-size:0.8rem;">▶</button>
+            <div class="calendar-nav-group">
+              <button id="btn-prev-month" class="cal-nav-btn" title="이전 달">‹</button>
+              <button id="btn-today-month" class="cal-today-pill" onclick="jumpToCurrentMonth()">오늘</button>
+              <button id="btn-next-month" class="cal-nav-btn" title="다음 달">›</button>
             </div>
           </div>
 
           <!-- 요일 헤더 -->
-          <div class="calendar-grid" style="margin-bottom:4px;">
+          <div class="calendar-grid" style="margin-bottom:6px;">
             <div class="calendar-day-header" style="color:#FF5E7E;">일</div>
-            <div class="calendar-day-header">월</div>
-            <div class="calendar-day-header">화</div>
-            <div class="calendar-day-header">수</div>
-            <div class="calendar-day-header">목</div>
-            <div class="calendar-day-header">금</div>
-            <div class="calendar-day-header" style="color:#1976D2;">토</div>
+            <div class="calendar-day-header" style="color:#6A6575;">월</div>
+            <div class="calendar-day-header" style="color:#6A6575;">화</div>
+            <div class="calendar-day-header" style="color:#6A6575;">수</div>
+            <div class="calendar-day-header" style="color:#6A6575;">목</div>
+            <div class="calendar-day-header" style="color:#6A6575;">금</div>
+            <div class="calendar-day-header" style="color:#2196F3;">토</div>
           </div>
 
           <!-- 날짜 그리드 -->
@@ -105,17 +107,17 @@
             <!-- JS 동적 렌더링 -->
           </div>
 
+          <!-- 이번 달 함께한 날 배너 -->
+          <div id="calendar-month-summary" class="calendar-month-stats-banner">
+            <span>✨ 이번 달 함께 운동한 날</span>
+            <span id="calendar-month-hearts" style="font-size:0.85rem; font-weight:800;">💖 0일 달성</span>
+          </div>
+
           <!-- 범례 가이드 -->
-          <div style="display:flex; justify-content:center; gap:14px; margin-top:14px; font-size:0.72rem; color:var(--text-muted);">
-            <div style="display:flex; align-items:center; gap:4px;">
-              <span class="stamp-dot stamp-bf"></span> 오동원 완료
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-              <span class="stamp-dot stamp-gf"></span> 김해솔 완료
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-              <span>💖</span> 둘 다 완료!
-            </div>
+          <div class="calendar-legend-bar">
+            <div class="legend-item"><span style="font-size:0.85rem;">🏃‍♂️</span> 오동원</div>
+            <div class="legend-item"><span style="font-size:0.85rem;">🐰</span> 김해솔</div>
+            <div class="legend-item" style="border-color:#FF85A1; color:#D81B60;"><span style="font-size:0.85rem;">💖</span> 함께 달성</div>
           </div>
         </div>
 
