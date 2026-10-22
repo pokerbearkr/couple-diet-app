@@ -55,8 +55,8 @@ const DEFAULT_STATE = {
     gfName: '김해솔 🐰'
   },
   supabase: {
-    url: '',
-    anonKey: '',
+    url: 'https://phrquhzdmssheveiyvei.supabase.co',
+    anonKey: 'sb_publishable_T-fLfm7ATY-3Vec4ZjS24Q_DtACNgqK',
     connected: false
   },
   attendance: {},
@@ -126,6 +126,13 @@ class AppStore {
       };
       if (!Array.isArray(data.penalties)) data.penalties = [];
       if (!Array.isArray(data.coupons)) data.coupons = [];
+      if (!data.supabase || !data.supabase.url) {
+        data.supabase = {
+          url: 'https://phrquhzdmssheveiyvei.supabase.co',
+          anonKey: 'sb_publishable_T-fLfm7ATY-3Vec4ZjS24Q_DtACNgqK',
+          connected: false
+        };
+      }
       return data;
     } catch (e) {
       return { ...DEFAULT_STATE };
