@@ -407,15 +407,17 @@ function toggleTodayAttendance(e) {
   }
 
   const currentVal = store.data.attendance[today][role];
-  store.data.attendance[today][role] = !currentVal;
+  const newVal = !currentVal;
+  store.data.attendance[today][role] = newVal;
   store.save();
 
-  if (!currentVal) {
+  if (newVal) {
     sfx.playSuccess();
     if (e) createFloatingHearts(e.clientX || window.innerWidth / 2, e.clientY || 200, 16);
     checkRewardBoxUnlocks();
   }
 
+  syncAttendanceToSupabase(today, role, newVal);
   renderHomeScreen();
 }
 
@@ -1003,7 +1005,132 @@ function closeModal(id) {
   if (modal) modal.classList.remove('active');
 }
 
-// --- 12. Supabase Integration Setup ---
+// --- 12. Supabase Cloud Backend & Realtime Synchronization ---
+let supabaseClient = null;
+
+function initSupabase() {
+  const url = store.data.supabase.url;
+  const key = store.data.supabase.anonKey;
+
+  if (url && key && window.supabase) {
+    try {
+      supabaseClient = window.supabase.createClient(url, key);
+      console.log('✅ Supabase Cloud Connected!');
+      updateCloudSyncStatusBadge(true);
+      setupSupabaseRealtime();
+      loadFromSupabase();
+    } catch (e) {
+      console.error('Supabase init error:', e);
+      updateCloudSyncStatusBadge(false);
+    }
+  } else {
+    updateCloudSyncStatusBadge(false);
+  }
+}
+
+function updateCloudSyncStatusBadge(isConnected) {
+  const badge = document.getElementById('cloud-sync-status');
+  if (badge) {
+    if (isConnected) {
+      badge.innerHTML = '☁️ 실시간 연동 중';
+      badge.style.color = '#2E7D32';
+      badge.style.background = '#E8F5E9';
+    } else {
+      badge.innerHTML = '💾 로컬 모드 (Supabase 미연동)';
+      badge.style.color = '#E65100';
+      badge.style.background = '#FFF3E0';
+    }
+  }
+}
+
+async function loadFromSupabase() {
+  if (!supabaseClient) return;
+  try {
+    // 1. 출석 불러오기
+    const { data: attList } = await supabaseClient.from('attendance').select('*');
+    if (attList && attList.length > 0) {
+      attList.forEach(item => {
+        if (!store.data.attendance[item.date]) {
+          store.data.attendance[item.date] = { boyfriend: false, girlfriend: false };
+        }
+        if (item.user_role === 'boyfriend') store.data.attendance[item.date].boyfriend = true;
+        if (item.user_role === 'girlfriend') store.data.attendance[item.date].girlfriend = true;
+      });
+    }
+
+    // 2. 칭찬 불러오기
+    const { data: cheerList } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
+    if (cheerList && cheerList.length > 0) {
+      store.data.cheers = cheerList.map(c => ({
+        id: c.id,
+        sender: c.sender_role,
+        senderName: c.sender_name,
+        message: c.message,
+        time: new Date(c.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      }));
+    }
+
+    // 3. 식단 불러오기
+    const { data: dietList } = await supabaseClient.from('diet_logs').select('*').order('created_at', { ascending: true });
+    if (dietList && dietList.length > 0) {
+      store.data.dietLogs = dietList.map(d => ({
+        id: d.id,
+        role: d.user_role,
+        date: d.date,
+        mealType: d.meal_type,
+        photoUrl: d.photo_url,
+        memo: d.memo,
+        createdAt: d.created_at
+      }));
+    }
+
+    store.save();
+    renderHomeScreen();
+    if (currentTab === 'stats') renderStatsScreen();
+    if (currentTab === 'diet') renderDietScreen();
+    if (currentTab === 'missions') renderMissionsScreen();
+  } catch (err) {
+    console.error('Supabase load error:', err);
+  }
+}
+
+function setupSupabaseRealtime() {
+  if (!supabaseClient) return;
+
+  // 실시간 출석 / 칭찬 / 식단 구독
+  supabaseClient
+    .channel('couple_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
+      loadFromSupabase();
+      sfx.playSuccess();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'cheers' }, (payload) => {
+      loadFromSupabase();
+      createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'diet_logs' }, () => {
+      loadFromSupabase();
+    })
+    .subscribe();
+}
+
+async function syncAttendanceToSupabase(date, role, isCompleted) {
+  if (!supabaseClient) return;
+  try {
+    if (isCompleted) {
+      await supabaseClient.from('attendance').upsert({
+        user_role: role,
+        date: date,
+        workout_type: '일반 운동'
+      });
+    } else {
+      await supabaseClient.from('attendance').delete().match({ date: date, user_role: role });
+    }
+  } catch (e) {
+    console.error('Supabase attendance sync error:', e);
+  }
+}
+
 function saveSupabaseSettings() {
   const url = document.getElementById('supabase-url-input').value.trim();
   const key = document.getElementById('supabase-key-input').value.trim();
@@ -1013,12 +1140,14 @@ function saveSupabaseSettings() {
   store.data.supabase.connected = !!(url && key);
   store.save();
 
-  alert('Supabase 연동 정보가 저장되었습니다! ☁️');
+  initSupabase();
+  alert('Supabase 연동이 저장되었습니다! 이제 두 폰 간 실시간 동기화가 이루어집니다. ☁️');
   closeModal('modal-settings');
 }
 
 // --- 13. Application Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+  initSupabase();
   // 1. 유저 역할 전환 바 이벤트 바인딩
   const bfBtn = document.getElementById('switch-bf');
   const gfBtn = document.getElementById('switch-gf');
