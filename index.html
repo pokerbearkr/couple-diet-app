@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>커플 다이어트 & 운동 메이트 (Couple Fit)</title>
+  
+  <!-- PWA & Mobile Web App Meta Tags (iOS Safari & Android Chrome) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CoupleFit">
+  <meta name="theme-color" content="#FFFDF9">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- 상단 헤더 -->
+    <header class="header">
+      <div class="header-title-box">
+        <span style="font-size: 1.3rem;">💑</span>
+        <div>
+          <div class="header-title">우리 함께 핏 (Couple Fit)</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="couple-dday" class="couple-dday-badge">함께한 지 D+100</span>
+        <button class="icon-btn" onclick="openModal('modal-settings')" title="설정">⚙️</button>
+      </div>
+    </header>
+
+    <!-- 유저 전환 바 (오동원 <-> 김해솔) -->
+    <div class="user-switch-bar">
+      <button id="switch-bf" class="switch-pill active-bf">
+        <span>🏃‍♂️</span> <span>오동원 (남친)</span>
+      </button>
+      <button id="switch-gf" class="switch-pill">
+        <span>🐰</span> <span>김해솔 (여친)</span>
+      </button>
+    </div>
+
+    <!-- 메인 컨텐츠 영역 -->
+    <main class="main-content">
+
+      <!-- ================= TAB 1: 홈 (달력 & 출석체크) ================= -->
+      <section id="tab-home" class="tab-page active">
+        <!-- 1-Tap 운동 출석 히어로 버튼 -->
+        <button id="hero-attendance-btn" class="attendance-hero-btn ready" onclick="toggleTodayAttendance(event)">
+          <div id="hero-attendance-icon" class="hero-btn-icon">🏃‍♂️</div>
+          <div id="hero-attendance-title" class="hero-btn-title">오늘 운동 완료 도장 찍기! 👟</div>
+          <div id="hero-attendance-desc" class="hero-btn-desc">원탭으로 출석하고 파트너와 하트를 완성하세요</div>
+        </button>
+
+        <!-- 스트릭 & 주간 달성률 위젯 -->
+        <div class="stats-summary-row">
+          <div class="stat-pill-card">
+            <div class="stat-icon-bg" style="background:#FFE8EC; color:#FF5E7E;">🔥</div>
+            <div>
+              <div id="streak-count" class="stat-val">3일 연속</div>
+              <div class="stat-lbl">연속 출석 스트릭</div>
+            </div>
+          </div>
+          <div class="stat-pill-card">
+            <div class="stat-icon-bg" style="background:#E3F2FD; color:#1976D2;">📊</div>
+            <div>
+              <div id="weekly-rate" class="stat-val">85% (6/7일)</div>
+              <div class="stat-lbl">이번 주 달성률</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 커플 달력 카드 -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">
+              <span>📅</span> <span id="calendar-month-label">2025년 2월</span>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <button id="btn-prev-month" class="icon-btn" style="width:28px;height:28px;font-size:0.8rem;">◀</button>
+              <button id="btn-next-month" class="icon-btn" style="width:28px;height:28px;font-size:0.8rem;">▶</button>
+            </div>
+          </div>
+
+          <!-- 요일 헤더 -->
+          <div class="calendar-grid" style="margin-bottom:4px;">
+            <div class="calendar-day-header" style="color:#FF5E7E;">일</div>
+            <div class="calendar-day-header">월</div>
+            <div class="calendar-day-header">화</div>
+            <div class="calendar-day-header">수</div>
+            <div class="calendar-day-header">목</div>
+            <div class="calendar-day-header">금</div>
+            <div class="calendar-day-header" style="color:#1976D2;">토</div>
+          </div>
+
+          <!-- 날짜 그리드 -->
+          <div id="calendar-days-container" class="calendar-grid">
+            <!-- JS 동적 렌더링 -->
+          </div>
+
+          <!-- 범례 가이드 -->
+          <div style="display:flex; justify-content:center; gap:14px; margin-top:14px; font-size:0.72rem; color:var(--text-muted);">
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span class="stamp-dot stamp-bf"></span> 오동원 완료
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span class="stamp-dot stamp-gf"></span> 김해솔 완료
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span>💖</span> 둘 다 완료!
+            </div>
+          </div>
+        </div>
+
+        <!-- 빠른 칭찬 한마디 보내기 -->
+        <div class="card">
+          <div class="card-title"><span>💌</span> 상대방에게 실시간 응원 보내기</div>
+          <div class="cheer-chip-list">
+            <button class="cheer-chip" onclick="sendCheerMessage('오늘도 운동 화이팅! 최고야 🥰')">오늘도 화이팅 🥰</button>
+            <button class="cheer-chip" onclick="sendCheerMessage('꾸준한 모습 너무 멋져 사랑해 💖')">너무 멋져 사랑해 💖</button>
+            <button class="cheer-chip" onclick="sendCheerMessage('무리하지 말고 물 꼭 챙겨 마셔 💧')">물 챙겨 마셔 💧</button>
+            <button class="cheer-chip" onclick="sendCheerMessage('주말에 맛있는 거 먹으러 가자 🥩')">주말에 맛집 가자 🥩</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: 통계 (걸음수 & 체중) ================= -->
+      <section id="tab-stats" class="tab-page">
+        <!-- 1. 걸음 수 기록 & 주간 그래프 -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title"><span>👟</span> 오늘 걸음 수 / 걷기 기록</div>
+            <span class="card-subtitle">폰 건강앱 숫자 입력</span>
+          </div>
+
+          <div class="step-input-box">
+            <input type="number" id="step-input" class="input-field" placeholder="오늘 걸음 수 (예: 8500)" />
+            <button class="btn-primary" onclick="saveStepLog()">저장</button>
+          </div>
+
+          <div style="margin-top: 14px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:8px;">
+              📊 주간 걸음 수 비교 (파랑: 오동원 / 분홍: 김해솔)
+            </div>
+            <canvas id="weekly-step-chart" width="360" height="150" style="width:100%; height:auto;"></canvas>
+          </div>
+        </div>
+
+        <!-- 2. 체중 기록장 (비공개 & 상대방은 변화량만) -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title"><span>⚖️</span> 체중 기록장</div>
+            <span class="weight-privacy-badge">🔒 상대방에겐 변화량만 공유</span>
+          </div>
+
+          <!-- 내 실제 체중 (본인만 보임) -->
+          <div class="weight-display-card">
+            <div>
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">내 현재 체중 (비공개)</div>
+              <div id="my-weight-display" style="font-size:1.4rem; font-weight:800; color:#D81B60; margin-top:2px;">- kg</div>
+              <div id="my-delta-display" style="font-size:0.75rem; color:#8E8A98; margin-top:2px;">시작 대비 - kg</div>
+            </div>
+            <div style="font-size:1.8rem;">🤫</div>
+          </div>
+
+          <!-- 파트너 체중 변화량 카드 (숫자 안보이고 그래프/변화량만) -->
+          <div class="weight-partner-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="partner-weight-label" style="font-size:0.8rem; font-weight:700; color:#2E7D32;">파트너의 체중 변화</span>
+              <span style="font-size:1.1rem;">🌱</span>
+            </div>
+            <div id="partner-delta-display" style="margin-top:6px;">
+              기록을 기다리는 중이에요
+            </div>
+          </div>
+
+          <!-- 체중 입력 -->
+          <div class="step-input-box" style="margin-top:14px;">
+            <input type="number" step="0.1" id="weight-input" class="input-field" placeholder="오늘 체중 (kg)" />
+            <button class="btn-primary" onclick="saveWeightLog()">기록하기</button>
+          </div>
+          <div style="font-size:0.72rem; color:var(--text-light); text-align:center;">
+            * 체중 숫자를 비교하지 않고 순수 변화량만 응원하여 스트레스를 줄입니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: 식단 (사진 일기) ================= -->
+      <section id="tab-diet" class="tab-page">
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title"><span>🥗</span> 식단 사진 일기</div>
+            <span class="card-subtitle">칼로리 계산 없이 기록만!</span>
+          </div>
+
+          <!-- 식사 구분 칩 -->
+          <div class="meal-type-chips">
+            <button class="meal-chip" data-type="아침">아침 🌅</button>
+            <button class="meal-chip active" data-type="점심">점심 ☀️</button>
+            <button class="meal-chip" data-type="저녁">저녁 🌙</button>
+            <button class="meal-chip" data-type="간식">간식 ☕</button>
+            <button class="meal-chip" data-type="야식">야식 🍕</button>
+          </div>
+
+          <!-- 사진 업로더 (카메라/앨범) -->
+          <label class="diet-photo-uploader" for="diet-file-input">
+            <input type="file" id="diet-file-input" accept="image/*" style="display:none;" onchange="handleDietPhotoUpload(event)" />
+            <div id="diet-upload-text">
+              <div style="font-size:1.8rem; margin-bottom:4px;">📷</div>
+              <div style="font-size:0.85rem; font-weight:700; color:var(--text-main);">사진 찍기 또는 앨범에서 선택</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">자동으로 예쁘게 압축되어 저장돼요</div>
+            </div>
+            <img id="diet-preview-img" class="diet-photo-preview" alt="식단 미리보기" />
+          </label>
+
+          <!-- 한 줄 메모 -->
+          <div style="margin-top:12px; display:flex; gap:8px;">
+            <input type="text" id="diet-memo-input" class="input-field" placeholder="한 줄 소감 (예: 닭가슴살 샐러드 냠냠 🥗)" />
+            <button class="btn-primary" onclick="saveDietLog()">올리기</button>
+          </div>
+        </div>
+
+        <!-- 식단 타임라인 피드 -->
+        <div class="card">
+          <div class="card-title"><span>📸</span> 우리들의 식단 피드</div>
+          <div id="diet-timeline" style="margin-top:10px;">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: 미션 & 보상 (대결/칭찬/쿠폰) ================= -->
+      <section id="tab-missions" class="tab-page">
+        <!-- 1. 주간 미션 대결 -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title"><span>⚔️</span> 주간 미션 대결</div>
+            <span class="card-subtitle">선의의 경쟁 & 귀여운 벌칙</span>
+          </div>
+          <div id="missions-list">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+
+        <!-- 2. 보상 상자 (데이트 쿠폰) -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title"><span>🎁</span> 커플 보상 상자</div>
+            <span id="total-heart-count" style="font-size:0.78rem; font-weight:800; color:var(--accent-heart);">💖 0개</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
+            둘 다 운동을 완료하여 모은 하트로 특별한 데이트 쿠폰을 여세요!
+          </div>
+          <div id="coupons-list" class="coupon-grid">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+
+        <!-- 3. 주고받은 칭찬 메시지 -->
+        <div class="card">
+          <div class="card-title"><span>💬</span> 최근 주고받은 응원 한마디</div>
+          <div id="cheer-messages-list" style="margin-top:10px;">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: 홈트 타이머 ================= -->
+      <section id="tab-timer" class="tab-page">
+        <div class="card" style="text-align:center;">
+          <div class="card-title-row">
+            <div class="card-title"><span>⏱️</span> 운동 루틴 & 휴식 타이머</div>
+            <button class="icon-btn" onclick="openModal('modal-timer-settings')" style="width:30px;height:30px;font-size:0.85rem;" title="시간 설정">⚙️</button>
+          </div>
+
+          <div id="timer-set-lbl" style="font-size:0.9rem; font-weight:800; color:var(--text-muted); margin-top:6px;">세트 1 / 4</div>
+
+          <!-- 원형 타이머 게이지 -->
+          <div class="timer-circle-container">
+            <svg class="timer-svg" width="210" height="210">
+              <circle class="timer-circle-bg" cx="105" cy="105" r="88" />
+              <circle id="timer-circle-progress" class="timer-circle-progress" cx="105" cy="105" r="88" />
+            </svg>
+            <div class="timer-center-text">
+              <div id="timer-sec" class="timer-seconds">45</div>
+              <div id="timer-phase" class="timer-phase-lbl">준비 완료</div>
+            </div>
+          </div>
+
+          <!-- 타이머 조작 버튼 -->
+          <div class="timer-controls">
+            <button id="timer-play-btn" class="timer-ctrl-btn play" onclick="toggleTimer()">▶️ 시작하기</button>
+            <button class="timer-ctrl-btn reset" onclick="resetTimer()">🔄 초기화</button>
+          </div>
+
+          <div style="margin-top:16px; font-size:0.75rem; color:var(--text-light);">
+            * 모든 세트를 끝내면 오늘 운동 출석 도장이 자동으로 찍힙니다! 🎯
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- 하단 탭 내비게이션 바 -->
+    <nav class="bottom-nav">
+      <button id="nav-home" class="nav-tab-btn active" data-tab="home">
+        <span class="nav-icon">🏠</span>
+        <span>홈/출석</span>
+      </button>
+      <button id="nav-stats" class="nav-tab-btn" data-tab="stats">
+        <span class="nav-icon">📊</span>
+        <span>통계/체중</span>
+      </button>
+      <button id="nav-diet" class="nav-tab-btn" data-tab="diet">
+        <span class="nav-icon">🥗</span>
+        <span>식단일기</span>
+      </button>
+      <button id="nav-missions" class="nav-tab-btn" data-tab="missions">
+        <span class="nav-icon">🎁</span>
+        <span>미션/보상</span>
+      </button>
+      <button id="nav-timer" class="nav-tab-btn" data-tab="timer">
+        <span class="nav-icon">⏱️</span>
+        <span>홈트타이머</span>
+      </button>
+    </nav>
+
+    <!-- 모달 1: 앱 설정 & 커플 코드 & 무료 Supabase 연동 -->
+    <div id="modal-settings" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main);">⚙️ 커플 앱 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-settings')" style="border:none;">✕</button>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">커플 방 코드</label>
+          <input type="text" id="couple-code-input" class="input-field" value="LOVE-2026" style="width:100%; font-weight:700;" readonly />
+          <div style="font-size:0.7rem; color:var(--text-light); margin-top:2px;">이 코드로 여자친구와 실시간으로 연결됩니다.</div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Supabase Project URL (선택사항)</label>
+          <input type="text" id="supabase-url-input" class="input-field" placeholder="https://your-project.supabase.co" style="width:100%; font-size:0.8rem;" />
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">Supabase Anon Key (선택사항)</label>
+          <input type="password" id="supabase-key-input" class="input-field" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." style="width:100%; font-size:0.8rem;" />
+          <div style="font-size:0.7rem; color:#2E7D32; margin-top:2px;">* Supabase 키 없이도 오프라인 및 로컬 모드로 100% 작동합니다.</div>
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:14px;" onclick="saveSupabaseSettings()">설정 저장하기</button>
+      </div>
+    </div>
+
+    <!-- 모달 2: 홈트 타이머 시간 설정 -->
+    <div id="modal-timer-settings" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main);">⏱️ 루틴 타이머 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-timer-settings')" style="border:none;">✕</button>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">운동 시간 (초)</label>
+          <input type="number" id="custom-work-sec" class="input-field" value="45" style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">휴식 시간 (초)</label>
+          <input type="number" id="custom-rest-sec" class="input-field" value="15" style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">총 세트 수</label>
+          <input type="number" id="custom-sets-count" class="input-field" value="4" style="width:100%;" />
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:14px;" onclick="applyTimerSettings()">타이머 적용하기</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

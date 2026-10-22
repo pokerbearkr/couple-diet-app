@@ -1,0 +1,22 @@
+{
+  "name": "우리 함께 핏 - 커플 다이어트 & 운동 메이트",
+  "short_name": "CoupleFit",
+  "description": "연인과 함께하는 즐거운 운동 출석, 걸음수, 식단일기, 비공개 체중 기록장",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FFFDF9",
+  "theme_color": "#FFCCD5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
