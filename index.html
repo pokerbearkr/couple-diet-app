@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=4.0">
+  <link rel="stylesheet" href="style.css?v=4.1">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -504,22 +504,46 @@
       <section id="tab-timer" class="tab-page">
         <div class="card" style="text-align:center;">
           <div class="card-title-row">
-            <div class="card-title"><span>⏱️</span> 운동 루틴 & 휴식 타이머</div>
-            <button class="icon-btn" onclick="openModal('modal-timer-settings')" style="width:30px;height:30px;font-size:0.85rem;" title="시간 설정">⚙️</button>
+            <div class="card-title"><span>⏱️</span> 운동 & 인터벌 타이머</div>
+            <button class="icon-btn" onclick="openTimerSettingsModal()" style="width:32px;height:32px;font-size:0.95rem;" title="시간 설정">⚙️</button>
           </div>
 
-          <div id="timer-set-lbl" style="font-size:0.9rem; font-weight:800; color:var(--text-muted); margin-top:6px;">세트 1 / 4</div>
+          <!-- 원터치 루틴 프리셋 칩 -->
+          <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:12px 0 14px 0;">
+            <button class="quick-chip" onclick="applyTimerPreset('haesol_2m')" style="background:#FFF0F3; color:#D81B60; border:1px solid #FFD1DC;">🐰 해솔이 2분 인터벌</button>
+            <button class="quick-chip" onclick="applyTimerPreset('interval_1m')">⚡ 1분 루틴</button>
+            <button class="quick-chip" onclick="applyTimerPreset('tabata')">🔥 타바타 (20초/10초)</button>
+            <button class="quick-chip" onclick="applyTimerPreset('runday_3m')">🏃 3분 인터벌</button>
+          </div>
+
+          <!-- 현재 세트 및 설정 요약 -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0 8px; margin-bottom:4px;">
+            <div id="timer-config-summary" style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">운동 2분 · 숨고르기 2분</div>
+            <div id="timer-set-lbl" class="pill" style="font-size:0.82rem; font-weight:800; background:#FFF5F7; color:var(--accent-heart);">세트 1 / 5</div>
+          </div>
 
           <!-- 원형 타이머 게이지 -->
-          <div class="timer-circle-container">
-            <svg class="timer-svg" width="210" height="210">
-              <circle class="timer-circle-bg" cx="105" cy="105" r="88" />
-              <circle id="timer-circle-progress" class="timer-circle-progress" cx="105" cy="105" r="88" />
+          <div class="timer-circle-container" id="timer-circle-box">
+            <svg class="timer-svg" width="220" height="220">
+              <circle class="timer-circle-bg" cx="110" cy="110" r="92" />
+              <circle id="timer-circle-progress" class="timer-circle-progress" cx="110" cy="110" r="92" />
             </svg>
             <div class="timer-center-text">
-              <div id="timer-sec" class="timer-seconds">45</div>
+              <div id="timer-sec" class="timer-seconds">02:00</div>
               <div id="timer-phase" class="timer-phase-lbl">준비 완료</div>
             </div>
+          </div>
+
+          <!-- 효과음 & 음성 안내 토글 -->
+          <div style="display:flex; justify-content:center; gap:16px; margin:8px 0 16px 0; font-size:0.75rem; color:var(--text-muted);">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="timer-sound-chk" checked onchange="toggleSoundEnabled(this.checked)" />
+              <span style="font-weight:700;">🔔 띵동 효과음</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="timer-voice-chk" checked onchange="toggleVoiceEnabled(this.checked)" />
+              <span style="font-weight:700;">🗣️ 음성 가이드</span>
+            </label>
           </div>
 
           <!-- 타이머 조작 버튼 -->
@@ -528,8 +552,8 @@
             <button class="timer-ctrl-btn reset" onclick="resetTimer()">🔄 초기화</button>
           </div>
 
-          <div style="margin-top:16px; font-size:0.75rem; color:var(--text-light);">
-            * 모든 세트를 끝내면 오늘 운동 출석 도장이 자동으로 찍힙니다! 🎯
+          <div style="margin-top:16px; font-size:0.72rem; color:var(--text-light); line-height:1.4;">
+            * 달리는 동안 화면이 꺼지지 않으며, 숨고르기/다시 시작할 때 맑은 <b>'띵동~🔔'</b> 소리가 울립니다!
           </div>
         </div>
       </section>
@@ -809,30 +833,57 @@
       </div>
     </div>
 
-    <!-- 모달 2: 홈트 타이머 시간 설정 -->
+    <!-- 모달 2: 홈트 & 인터벌 타이머 설정 -->
     <div id="modal-timer-settings" class="modal-overlay">
       <div class="modal-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-          <h3 style="font-size:1.1rem; color:var(--text-main);">⏱️ 루틴 타이머 설정</h3>
-          <button class="icon-btn" onclick="closeModal('modal-timer-settings')" style="border:none;">✕</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; position:sticky; top:-20px; background:#FFF; padding-top:4px; padding-bottom:8px; z-index:10; border-bottom:1px solid #F0F0F0; margin-top:-4px;">
+          <h3 style="font-size:1.05rem; color:var(--text-main); font-weight:800; margin:0;">⏱️ 인터벌 타이머 설정</h3>
+          <button class="icon-btn" onclick="closeModal('modal-timer-settings')" style="border:none; width:30px; height:30px; font-size:1rem; cursor:pointer;">✕</button>
         </div>
 
+        <!-- 추천 인터벌 루틴 -->
         <div style="margin-bottom:12px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">운동 시간 (초)</label>
-          <input type="number" id="custom-work-sec" class="input-field" value="45" style="width:100%;" />
+          <label style="font-size:0.75rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:6px;">추천 인터벌 루틴 (원터치)</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <button type="button" class="btn-primary" style="padding:10px 8px; font-size:0.75rem; background:#FFF0F3; color:#D81B60; border:1px solid #FFD1DC; box-shadow:none; text-align:left;" onclick="applyTimerPreset('haesol_2m'); closeModal('modal-timer-settings');">🐰 <b>해솔이 2분</b><br><span style="font-size:0.68rem; font-weight:600; opacity:0.85;">2분 운동+2분 휴식 (5세트)</span></button>
+            <button type="button" class="btn-primary" style="padding:10px 8px; font-size:0.75rem; background:#F0F7FF; color:#1976D2; border:1px solid #D0E3FF; box-shadow:none; text-align:left;" onclick="applyTimerPreset('tabata'); closeModal('modal-timer-settings');">🔥 <b>타바타 루틴</b><br><span style="font-size:0.68rem; font-weight:600; opacity:0.85;">20초 운동+10초 휴식 (8세트)</span></button>
+          </div>
         </div>
 
-        <div style="margin-bottom:12px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">휴식 시간 (초)</label>
-          <input type="number" id="custom-rest-sec" class="input-field" value="15" style="width:100%;" />
+        <!-- 직접 분/초 설정 -->
+        <div style="background:#F8F9FA; border:1px solid #ECEFF1; border-radius:12px; padding:12px; margin-bottom:14px;">
+          <div style="font-size:0.8rem; font-weight:800; color:var(--text-main); margin-bottom:8px;">⚙️ 직접 시간 입력</div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="font-size:0.72rem; font-weight:700; color:#FF5E7E; display:block; margin-bottom:4px;">🔥 달리기/운동 시간</label>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="number" id="custom-work-min" class="input-field" value="2" min="0" max="60" style="flex:1; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">분</span>
+              <input type="number" id="custom-work-sec-part" class="input-field" value="0" min="0" max="59" style="flex:1; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">초</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <label style="font-size:0.72rem; font-weight:700; color:#2E7D32; display:block; margin-bottom:4px;">🍃 숨고르기/휴식 시간</label>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="number" id="custom-rest-min" class="input-field" value="2" min="0" max="60" style="flex:1; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">분</span>
+              <input type="number" id="custom-rest-sec-part" class="input-field" value="0" min="0" max="59" style="flex:1; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">초</span>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:0.72rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">🎯 총 반복 세트 수</label>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="number" id="custom-sets-count" class="input-field" value="5" min="1" max="50" style="flex:1; text-align:center; font-weight:800; font-size:0.9rem;" />
+              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">세트</span>
+            </div>
+          </div>
         </div>
 
-        <div style="margin-bottom:16px;">
-          <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">총 세트 수</label>
-          <input type="number" id="custom-sets-count" class="input-field" value="4" style="width:100%;" />
-        </div>
-
-        <button class="btn-primary" style="width:100%; padding:14px;" onclick="applyTimerSettings()">타이머 적용하기</button>
+        <button class="btn-primary" style="width:100%; padding:12px; font-size:0.88rem;" onclick="applyTimerSettings()">타이머 적용하기 ✨</button>
       </div>
     </div>
 
@@ -928,6 +979,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.1"></script>
 </body>
 </html>

@@ -8,14 +8,21 @@
 class SoundEffects {
   constructor() {
     this.ctx = null;
+    this.soundEnabled = true;
+    this.voiceEnabled = true;
+    this.vibrateEnabled = true;
   }
   init() {
     if (!this.ctx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (AudioContext) this.ctx = new AudioContext();
     }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
   }
-  playBeep(freq = 520, duration = 0.15, type = 'sine') {
+  playTone(freq = 520, duration = 0.2, type = 'sine', gainVal = 0.25) {
+    if (!this.soundEnabled) return;
     this.init();
     if (!this.ctx) return;
     try {
@@ -23,8 +30,8 @@ class SoundEffects {
       const gain = this.ctx.createGain();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+      gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start();
@@ -33,14 +40,97 @@ class SoundEffects {
       console.log('Audio error:', e);
     }
   }
+  // 맑고 청량한 2음 '띵~동!🔔' (G5 784Hz -> E5 659Hz + 벨 배음 하모닉스)
+  playDingDong() {
+    if (!this.soundEnabled) return;
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      // 1음 '띵~' (G5 783.99Hz + G6 1567.98Hz harmonic)
+      const osc1 = this.ctx.createOscillator();
+      const osc1h = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(783.99, now);
+      osc1h.type = 'triangle';
+      osc1h.frequency.setValueAtTime(1567.98, now);
+      gain1.gain.setValueAtTime(0.35, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc1.connect(gain1);
+      osc1h.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      osc1.start(now);
+      osc1h.start(now);
+      osc1.stop(now + 0.65);
+      osc1h.stop(now + 0.65);
+
+      // 2음 '동~' (E5 659.25Hz + E6 1318.5Hz harmonic)
+      const t2 = now + 0.28;
+      const osc2 = this.ctx.createOscillator();
+      const osc2h = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, t2);
+      osc2h.type = 'triangle';
+      osc2h.frequency.setValueAtTime(1318.51, t2);
+      gain2.gain.setValueAtTime(0.38, t2);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.85);
+      osc2.connect(gain2);
+      osc2h.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      osc2.start(t2);
+      osc2h.start(t2);
+      osc2.stop(t2 + 0.85);
+      osc2h.stop(t2 + 0.85);
+    } catch (e) {
+      console.log('DingDong error:', e);
+    }
+  }
+  // 활기찬 출발 / 다음 세트 시작 벨 (도-미-솔 벨)
+  playStartChime() {
+    if (!this.soundEnabled) return;
+    this.playTone(523.25, 0.12, 'sine', 0.25); // C5
+    setTimeout(() => this.playTone(659.25, 0.12, 'sine', 0.25), 110); // E5
+    setTimeout(() => this.playTone(783.99, 0.35, 'sine', 0.32), 220); // G5
+  }
+  playCountdownTick(num = 3) {
+    if (!this.soundEnabled) return;
+    const freq = num === 1 ? 987.77 : (num === 2 ? 880 : 784);
+    this.playTone(freq, 0.1, 'sine', 0.22);
+  }
   playSuccess() {
-    this.playBeep(523.25, 0.12); // C5
-    setTimeout(() => this.playBeep(659.25, 0.12), 120); // E5
-    setTimeout(() => this.playBeep(783.99, 0.25), 240); // G5
+    this.playStartChime();
+    setTimeout(() => this.playTone(1046.5, 0.5, 'sine', 0.35), 350); // C6 Fanfare
+  }
+  playBeep(freq = 520, duration = 0.15, type = 'sine') {
+    this.playTone(freq, duration, type, 0.2);
   }
   playRest() {
-    this.playBeep(440, 0.18, 'triangle');
-    setTimeout(() => this.playBeep(349.23, 0.25, 'triangle'), 180);
+    this.playDingDong();
+  }
+  speak(text) {
+    if (!this.voiceEnabled) return;
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        utter.rate = 1.08;
+        utter.pitch = 1.1;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        console.log('TTS error:', e);
+      }
+    }
+  }
+  vibrate(pattern = [150, 100, 200]) {
+    if (!this.vibrateEnabled) return;
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {}
+    }
   }
 }
 const sfx = new SoundEffects();
@@ -1840,15 +1930,41 @@ function restoreCoupon(couponId) {
   }
 }
 
-// --- 10. Feature 8: Workout Routine & Rest Timer ---
+// --- 10. Feature 8: Workout Routine & Interval Timer ---
 let timerInterval = null;
 let timerRunning = false;
 let currentPhase = 'ready'; // 'work' | 'rest' | 'ready'
 let currentSet = 1;
-let totalSets = 4;
-let workSec = 45;
-let restSec = 15;
-let remainingSec = 45;
+let totalSets = 5;
+let workSec = 120; // 기본 2분
+let restSec = 120; // 기본 2분
+let remainingSec = 120;
+let wakeLockSentinel = null;
+
+async function enableScreenWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+    } catch (e) {
+      console.log('WakeLock request error:', e);
+    }
+  }
+}
+
+function disableScreenWakeLock() {
+  if (wakeLockSentinel) {
+    try {
+      wakeLockSentinel.release();
+    } catch (e) {}
+    wakeLockSentinel = null;
+  }
+}
+
+function formatTimeMMSS(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 function renderTimerScreen() {
   updateTimerDisplay();
@@ -1858,12 +1974,22 @@ function updateTimerDisplay() {
   const secEl = document.getElementById('timer-sec');
   const phaseEl = document.getElementById('timer-phase');
   const setEl = document.getElementById('timer-set-lbl');
+  const summaryEl = document.getElementById('timer-config-summary');
   const circle = document.getElementById('timer-circle-progress');
 
-  if (secEl) secEl.innerText = remainingSec;
+  if (secEl) secEl.innerText = formatTimeMMSS(remainingSec);
   if (setEl) setEl.innerText = `세트 ${currentSet} / ${totalSets}`;
+  if (summaryEl) {
+    const wMin = Math.floor(workSec / 60);
+    const wSec = workSec % 60;
+    const rMin = Math.floor(restSec / 60);
+    const rSec = restSec % 60;
+    const wText = wMin > 0 ? (wSec > 0 ? `${wMin}분 ${wSec}초` : `${wMin}분`) : `${wSec}초`;
+    const rText = rMin > 0 ? (rSec > 0 ? `${rMin}분 ${rSec}초` : `${rMin}분`) : `${rSec}초`;
+    summaryEl.innerText = `운동 ${wText} · 숨고르기 ${rText}`;
+  }
 
-  const circumference = 2 * Math.PI * 88;
+  const circumference = 2 * Math.PI * 92;
   const maxSec = currentPhase === 'rest' ? restSec : workSec;
   const offset = circumference - (remainingSec / maxSec) * circumference;
 
@@ -1874,15 +2000,17 @@ function updateTimerDisplay() {
   }
 
   if (phaseEl) {
+    phaseEl.className = 'timer-phase-lbl';
     if (currentPhase === 'ready') {
       phaseEl.innerText = '준비 완료 (시작을 눌러주세요)';
       phaseEl.style.color = '#8E8A98';
+      phaseEl.style.background = '#F5F5F5';
     } else if (currentPhase === 'work') {
-      phaseEl.innerText = '🔥 열정 운동 중!';
-      phaseEl.style.color = '#FF5E7E';
+      phaseEl.innerText = '🔥 열정 달리기 / 운동 중!';
+      phaseEl.classList.add('work');
     } else if (currentPhase === 'rest') {
-      phaseEl.innerText = '💧 숨 고르며 휴식 중';
-      phaseEl.style.color = '#4CAF50';
+      phaseEl.innerText = '🍃 숨고르기 / 가볍게 걷기';
+      phaseEl.classList.add('rest');
     }
   }
 
@@ -1903,10 +2031,14 @@ function toggleTimer() {
 
 function startTimer() {
   sfx.init();
+  enableScreenWakeLock();
+
   if (currentPhase === 'ready') {
     currentPhase = 'work';
     remainingSec = workSec;
-    sfx.playBeep(600, 0.2);
+    sfx.playStartChime();
+    sfx.vibrate([150, 100, 150]);
+    sfx.speak(`1세트 달리기 시작! 힘내세요!`);
   }
 
   timerRunning = true;
@@ -1917,27 +2049,32 @@ function startTimer() {
     remainingSec--;
 
     if (remainingSec <= 3 && remainingSec > 0) {
-      sfx.playBeep(440, 0.08); // 3초 카운트다운
+      sfx.playCountdownTick(remainingSec);
     }
 
     if (remainingSec <= 0) {
       if (currentPhase === 'work') {
-        // 운동 끝 -> 휴식
-        sfx.playRest();
+        // 운동 끝 -> 숨고르기(휴식) 전환! 맑은 띵~동!🔔
+        sfx.playDingDong();
+        sfx.vibrate([200, 100, 200]);
+
         if (currentSet < totalSets) {
           currentPhase = 'rest';
           remainingSec = restSec;
+          sfx.speak('숨고르기 시작! 가볍게 걸으며 호흡하세요.');
         } else {
           // 전체 세트 완료!
           finishWorkoutSession();
           return;
         }
       } else if (currentPhase === 'rest') {
-        // 휴식 끝 -> 다음 세트 운동
+        // 숨고르기 끝 -> 다음 세트 달리기/운동 시작!
         currentSet++;
         currentPhase = 'work';
         remainingSec = workSec;
-        sfx.playBeep(650, 0.25);
+        sfx.playStartChime();
+        sfx.vibrate([150, 80, 150]);
+        sfx.speak(`${currentSet}세트 달리기 시작!`);
       }
     }
     updateTimerDisplay();
@@ -1947,6 +2084,7 @@ function startTimer() {
 function pauseTimer() {
   timerRunning = false;
   clearInterval(timerInterval);
+  disableScreenWakeLock();
   updateTimerDisplay();
 }
 
@@ -1961,6 +2099,7 @@ function resetTimer() {
 function finishWorkoutSession() {
   pauseTimer();
   sfx.playSuccess();
+  sfx.speak('수고하셨습니다! 모든 세트 운동을 완료했습니다. 출석 도장이 찍혔습니다!');
   currentPhase = 'ready';
   currentSet = 1;
   remainingSec = workSec;
@@ -1974,23 +2113,86 @@ function finishWorkoutSession() {
   }
   store.data.attendance[today][role] = true;
   store.save();
+  syncAttendanceToSupabase(today, role, true);
 
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 30);
-  alert('🎉 홈트레이닝 완료! 오늘 운동 출석 도장이 자동으로 찍혔습니다!');
+  alert('🎉 홈트 & 러닝 완료! 오늘 운동 출석 도장이 자동으로 찍혔습니다! 💖');
   switchTab('home');
 }
 
-function applyTimerSettings() {
-  const w = parseInt(document.getElementById('custom-work-sec').value, 10);
-  const r = parseInt(document.getElementById('custom-rest-sec').value, 10);
-  const s = parseInt(document.getElementById('custom-sets-count').value, 10);
+function applyTimerPreset(presetType) {
+  if (presetType === 'haesol_2m') {
+    workSec = 120; // 2분
+    restSec = 120; // 2분
+    totalSets = 5; // 5세트 (총 20분)
+  } else if (presetType === 'interval_1m') {
+    workSec = 60; // 1분
+    restSec = 60; // 1분
+    totalSets = 4;
+  } else if (presetType === 'tabata') {
+    workSec = 20; // 20초
+    restSec = 10; // 10초
+    totalSets = 8;
+  } else if (presetType === 'runday_3m') {
+    workSec = 180; // 3분
+    restSec = 120; // 2분
+    totalSets = 4;
+  }
+  resetTimer();
+  sfx.playSuccess();
+}
 
-  if (w > 0) workSec = w;
-  if (r > 0) restSec = r;
-  if (s > 0) totalSets = s;
+function openTimerSettingsModal() {
+  const wMin = Math.floor(workSec / 60);
+  const wSec = workSec % 60;
+  const rMin = Math.floor(restSec / 60);
+  const rSec = restSec % 60;
+
+  const wMinIn = document.getElementById('custom-work-min');
+  const wSecIn = document.getElementById('custom-work-sec-part');
+  const rMinIn = document.getElementById('custom-rest-min');
+  const rSecIn = document.getElementById('custom-rest-sec-part');
+  const setIn = document.getElementById('custom-sets-count');
+
+  if (wMinIn) wMinIn.value = wMin;
+  if (wSecIn) wSecIn.value = wSec;
+  if (rMinIn) rMinIn.value = rMin;
+  if (rSecIn) rSecIn.value = rSec;
+  if (setIn) setIn.value = totalSets;
+
+  openModal('modal-timer-settings');
+}
+
+function applyTimerSettings() {
+  const wMin = parseInt(document.getElementById('custom-work-min').value, 10) || 0;
+  const wSec = parseInt(document.getElementById('custom-work-sec-part').value, 10) || 0;
+  const rMin = parseInt(document.getElementById('custom-rest-min').value, 10) || 0;
+  const rSec = parseInt(document.getElementById('custom-rest-sec-part').value, 10) || 0;
+  const sets = parseInt(document.getElementById('custom-sets-count').value, 10) || 1;
+
+  const totalWork = wMin * 60 + wSec;
+  const totalRest = rMin * 60 + rSec;
+
+  if (totalWork <= 0) return alert('운동 시간은 최소 1초 이상이어야 합니다!');
+  if (totalRest < 0) return alert('숨고르기 시간을 확인해주세요!');
+
+  workSec = totalWork;
+  restSec = totalRest;
+  totalSets = Math.max(1, sets);
 
   resetTimer();
+  sfx.playSuccess();
   closeModal('modal-timer-settings');
+}
+
+function toggleSoundEnabled(enabled) {
+  sfx.soundEnabled = enabled;
+  if (enabled) sfx.playDingDong();
+}
+
+function toggleVoiceEnabled(enabled) {
+  sfx.voiceEnabled = enabled;
+  if (enabled) sfx.speak('음성 안내가 켜졌습니다');
 }
 
 // --- 11. Modal Window Helpers ---

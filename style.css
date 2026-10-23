@@ -1009,13 +1009,14 @@ body {
   cursor: default;
 }
 
-/* 운동 루틴 타이머 */
+/* 운동 루틴 & 인터벌 타이머 */
 .timer-circle-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px 0;
+  padding: 16px 0;
+  position: relative;
 }
 
 .timer-svg {
@@ -1024,7 +1025,7 @@ body {
 
 .timer-circle-bg {
   fill: none;
-  stroke: #F0EAE6;
+  stroke: #F3EBE7;
   stroke-width: 10;
 }
 
@@ -1033,7 +1034,7 @@ body {
   stroke: var(--accent-heart);
   stroke-width: 10;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+  transition: stroke-dashoffset 0.15s linear, stroke 0.3s;
 }
 
 .timer-center-text {
@@ -1041,20 +1042,44 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 .timer-seconds {
-  font-size: 2.8rem;
+  font-size: 2.7rem;
   font-weight: 800;
   color: var(--text-main);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
 }
 
 .timer-phase-lbl {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 800;
   color: var(--accent-heart);
   margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #FFF5F7;
+  transition: all 0.2s;
+}
+
+.timer-phase-lbl.rest {
+  color: #2E7D32;
+  background: #E8F5E9;
+}
+
+.timer-phase-lbl.work {
+  color: #D81B60;
+  background: #FCE4EC;
+  animation: pulsePhase 1.5s infinite;
+}
+
+@keyframes pulsePhase {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 .timer-controls {
