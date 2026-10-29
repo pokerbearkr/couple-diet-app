@@ -525,7 +525,7 @@ function renderCalendar() {
   }
 }
 
-function toggleDateAttendance(dateStr, e) {
+async function toggleDateAttendance(dateStr, e) {
   const role = store.data.currentRole;
   if (!store.data.attendance[dateStr]) {
     store.data.attendance[dateStr] = { boyfriend: false, girlfriend: false, workoutType: '일반 운동' };
@@ -542,11 +542,11 @@ function toggleDateAttendance(dateStr, e) {
     checkRewardBoxUnlocks();
   }
 
-  syncAttendanceToSupabase(dateStr, role, newVal);
   renderHomeScreen();
+  await syncAttendanceToSupabase(dateStr, role, newVal);
 }
 
-function toggleTodayAttendance(e) {
+async function toggleTodayAttendance(e) {
   const role = store.data.currentRole;
   const today = getTodayStr();
   if (!store.data.attendance[today]) {
@@ -564,8 +564,8 @@ function toggleTodayAttendance(e) {
     checkRewardBoxUnlocks();
   }
 
-  syncAttendanceToSupabase(today, role, newVal);
   renderHomeScreen();
+  await syncAttendanceToSupabase(today, role, newVal);
 }
 
 // --- 7. Custom In-App Date Picker & State ---
@@ -816,7 +816,7 @@ function renderStatsScreen() {
   }
 }
 
-function saveStepLog() {
+async function saveStepLog() {
   const val = parseInt(document.getElementById('step-input').value, 10);
   if (isNaN(val) || val < 0) return alert('올바른 걸음 수를 입력해주세요!');
 
@@ -827,14 +827,13 @@ function saveStepLog() {
   store.data.stepLogs[targetDate][role] = val;
   store.save();
 
-  syncStepToSupabase(targetDate, role, val);
-
   sfx.playSuccess();
   alert(`${formatDatePretty(targetDate)} 걸음 수가 저장되었습니다! 👟`);
   renderStatsScreen();
+  await syncStepToSupabase(targetDate, role, val);
 }
 
-function saveWeightLog() {
+async function saveWeightLog() {
   const val = parseFloat(document.getElementById('weight-input').value);
   if (isNaN(val) || val <= 20 || val >= 250) return alert('올바른 체중(kg)을 입력해주세요!');
 
@@ -855,12 +854,11 @@ function saveWeightLog() {
   }
 
   store.save();
-  syncWeightToSupabase(targetDate, role, val, baseline);
-
   sfx.playSuccess();
   document.getElementById('weight-input').value = '';
   alert(`${formatDatePretty(targetDate)} 비공개 체중이 기록되었습니다! 상대방에게는 변화량만 공유됩니다. 🔒`);
   renderStatsScreen();
+  await syncWeightToSupabase(targetDate, role, val, baseline);
 }
 
 function drawWeeklyStepChart() {
@@ -1108,7 +1106,7 @@ function handleDietEditPhotoUpload(e) {
   reader.readAsDataURL(file);
 }
 
-function saveEditedDietLog() {
+async function saveEditedDietLog() {
   const editId = document.getElementById('diet-edit-id').value;
   const item = store.data.dietLogs.find(d => d.id === editId);
   if (!item) return;
@@ -1119,21 +1117,20 @@ function saveEditedDietLog() {
   if (currentDietEditPhoto) item.photoUrl = currentDietEditPhoto;
 
   store.save();
-  updateDietInSupabase(item);
-
   sfx.playSuccess();
   closeModal('modal-diet-edit');
   renderDietScreen();
+  await updateDietInSupabase(item);
   alert('식단 일기가 성공적으로 수정되었습니다! 🥗');
 }
 
-function deleteDietLog(dietId) {
+async function deleteDietLog(dietId) {
   if (confirm('이 식단 일기를 삭제하시겠습니까?')) {
     store.data.dietLogs = store.data.dietLogs.filter(d => d.id !== dietId);
     store.save();
-    deleteDietFromSupabase(dietId);
     sfx.playSuccess();
     renderDietScreen();
+    await deleteDietFromSupabase(dietId);
   }
 }
 
@@ -1179,7 +1176,7 @@ function clearDietDateFilter() {
   renderDietScreen();
 }
 
-function saveDietLog() {
+async function saveDietLog() {
   const memo = document.getElementById('diet-memo-input').value.trim();
   if (!currentPhotoDataUrl && !memo) {
     return alert('식단 사진을 등록하거나 한 줄 소감을 입력해주세요!');
@@ -1199,7 +1196,6 @@ function saveDietLog() {
 
   store.data.dietLogs.push(newLog);
   store.save();
-  syncDietToSupabase(newLog);
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 16);
@@ -1212,6 +1208,7 @@ function saveDietLog() {
 
   alert(`${formatDatePretty(targetDate)} 식단 일기가 등록되었습니다! 🥗`);
   renderDietScreen();
+  await syncDietToSupabase(newLog);
 }
 
 // --- 9. Feature 5, 6, 7: Missions, Penalties, Cheers, Reward Box ---
@@ -1497,7 +1494,7 @@ function openSettleMissionModal(missionId) {
   openModal('modal-mission-settle');
 }
 
-function confirmSettleWinner(winnerRole) {
+async function confirmSettleWinner(winnerRole) {
   const missionId = document.getElementById('settle-mission-id').value;
   const m = store.data.missions.find(item => item.id === missionId);
   if (!m) return;
@@ -1526,9 +1523,6 @@ function confirmSettleWinner(winnerRole) {
   m.gfProgress = 0;
   store.save();
 
-  syncPenaltyToSupabase(newPenalty);
-  syncMissionProgressToSupabase(m);
-
   closeModal('modal-mission-settle');
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
@@ -1537,6 +1531,11 @@ function confirmSettleWinner(winnerRole) {
   // 벌칙 탭으로 자동 이동
   switchMissionSubTab('penalties');
   setPenaltyFilter('pending');
+
+  await Promise.all([
+    syncPenaltyToSupabase(newPenalty),
+    syncMissionProgressToSupabase(m)
+  ]);
 }
 
 // --- 벌칙 생성/수정/완료/삭제 로직 ---
@@ -1565,7 +1564,7 @@ function openEditPenaltyModal(penaltyId) {
   openModal('modal-penalty-edit');
 }
 
-function savePenaltyData() {
+async function savePenaltyData() {
   const editId = document.getElementById('penalty-edit-id').value;
   const title = document.getElementById('penalty-title-input').value.trim();
   const fromMission = document.getElementById('penalty-from-input').value.trim();
@@ -1607,30 +1606,29 @@ function savePenaltyData() {
 
   store.save();
   const targetP = editId ? store.data.penalties.find(item => item.id === editId) : store.data.penalties[0];
-  if (targetP) syncPenaltyToSupabase(targetP);
 
   sfx.playSuccess();
   closeModal('modal-penalty-edit');
   renderMissionsScreen();
+  if (targetP) await syncPenaltyToSupabase(targetP);
 }
 
-function deletePenalty(penaltyId) {
+async function deletePenalty(penaltyId) {
   if (confirm('이 벌칙을 삭제하시겠습니까?')) {
     store.data.penalties = store.data.penalties.filter(item => item.id !== penaltyId);
     store.save();
-    deletePenaltyFromSupabase(penaltyId);
     renderMissionsScreen();
+    await deletePenaltyFromSupabase(penaltyId);
   }
 }
 
-function togglePenaltyComplete(penaltyId, markAsCompleted) {
+async function togglePenaltyComplete(penaltyId, markAsCompleted) {
   const p = store.data.penalties.find(item => item.id === penaltyId);
   if (!p) return;
 
   p.completed = markAsCompleted;
   p.completedAt = markAsCompleted ? getTodayStr() : null;
   store.save();
-  syncPenaltyToSupabase(p);
 
   if (markAsCompleted) {
     sfx.playSuccess();
@@ -1638,6 +1636,7 @@ function togglePenaltyComplete(penaltyId, markAsCompleted) {
     alert(`👏 벌칙 [${p.title}] 수행이 완료되었습니다!`);
   }
   renderMissionsScreen();
+  await syncPenaltyToSupabase(p);
 }
 
 // --- 주간 미션 생성/수정/삭제 로직 ---
@@ -1854,7 +1853,7 @@ async function saveWishlistData() {
   renderWishlist();
 }
 
-function toggleWishlistEaten(id) {
+async function toggleWishlistEaten(id) {
   if (!store.data.foodWishlist) store.data.foodWishlist = [];
   const item = store.data.foodWishlist.find(w => w.id === id);
   if (!item) return;
@@ -1863,7 +1862,6 @@ function toggleWishlistEaten(id) {
   item.eatenDate = item.isEaten ? getTodayStr() : null;
 
   store.save();
-  syncWishlistToSupabase(item);
 
   if (item.isEaten) {
     sfx.playSuccess();
@@ -1874,15 +1872,16 @@ function toggleWishlistEaten(id) {
   }
 
   renderWishlist();
+  await syncWishlistToSupabase(item);
 }
 
-function deleteWishlist(id) {
+async function deleteWishlist(id) {
   if (confirm('이 위시리스트 항목을 삭제하시겠습니까?')) {
     if (!store.data.foodWishlist) store.data.foodWishlist = [];
     store.data.foodWishlist = store.data.foodWishlist.filter(w => w.id !== id);
     store.save();
-    deleteWishlistFromSupabase(id);
     renderWishlist();
+    await deleteWishlistFromSupabase(id);
   }
 }
 
@@ -1964,7 +1963,7 @@ function sendCustomCheerMessage(inputId) {
   input.value = '';
 }
 
-function sendCheerMessage(msgText) {
+async function sendCheerMessage(msgText) {
   const role = store.data.currentRole;
   const senderName = role === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
 
@@ -1980,11 +1979,11 @@ function sendCheerMessage(msgText) {
   };
   store.data.cheers.push(newCheer);
   store.save();
-  syncCheerToSupabase(newCheer);
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
   renderMissionsScreen();
+  await syncCheerToSupabase(newCheer);
 }
 
 function countTotalHearts() {
@@ -2122,16 +2121,16 @@ async function saveCouponData() {
   renderMissionsScreen();
 }
 
-function deleteCoupon(couponId) {
+async function deleteCoupon(couponId) {
   if (confirm('이 보상 쿠폰을 삭제하시겠습니까?')) {
     store.data.coupons = store.data.coupons.filter(item => item.id !== couponId);
     store.save();
-    deleteCouponFromSupabase(couponId);
     renderMissionsScreen();
+    await deleteCouponFromSupabase(couponId);
   }
 }
 
-function useCoupon(couponId) {
+async function useCoupon(couponId) {
   const cp = store.data.coupons.find(c => c.id === couponId);
   if (!cp) return;
 
@@ -2139,14 +2138,14 @@ function useCoupon(couponId) {
     cp.used = true;
     cp.usedAt = getTodayStr();
     store.save();
-    syncCouponUsageToSupabase(cp);
     sfx.playSuccess();
     createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
     renderMissionsScreen();
+    await syncCouponUsageToSupabase(cp);
   }
 }
 
-function restoreCoupon(couponId) {
+async function restoreCoupon(couponId) {
   const cp = store.data.coupons.find(c => c.id === couponId);
   if (!cp) return;
 
@@ -2154,8 +2153,8 @@ function restoreCoupon(couponId) {
     cp.used = false;
     delete cp.usedAt;
     store.save();
-    syncCouponUsageToSupabase(cp);
     renderMissionsScreen();
+    await syncCouponUsageToSupabase(cp);
   }
 }
 
@@ -2488,30 +2487,34 @@ function updateCloudSyncStatusBadge(isConnected) {
 async function loadFromSupabase(silent = false) {
   if (!supabaseClient) return;
   try {
-    // 1. 출석 불러오기
-    const { data: attList } = await supabaseClient.from('attendance').select('*');
-    if (attList && attList.length > 0) {
+    // 1. 출석 불러오기 (취소/해제 동기화를 위해 서버 기준으로 재구성)
+    const { data: attList, error: attErr } = await supabaseClient.from('attendance').select('*');
+    if (!attErr && Array.isArray(attList)) {
+      const newAttendance = {};
       attList.forEach(item => {
-        if (!store.data.attendance[item.date]) {
-          store.data.attendance[item.date] = { boyfriend: false, girlfriend: false };
+        if (!newAttendance[item.date]) {
+          newAttendance[item.date] = { boyfriend: false, girlfriend: false };
         }
-        if (item.user_role === 'boyfriend') store.data.attendance[item.date].boyfriend = true;
-        if (item.user_role === 'girlfriend') store.data.attendance[item.date].girlfriend = true;
+        if (item.user_role === 'boyfriend') newAttendance[item.date].boyfriend = true;
+        if (item.user_role === 'girlfriend') newAttendance[item.date].girlfriend = true;
       });
+      store.data.attendance = newAttendance;
     }
 
     // 2. 걸음 수 불러오기
-    const { data: stepList } = await supabaseClient.from('step_logs').select('*');
-    if (stepList && stepList.length > 0) {
+    const { data: stepList, error: stepErr } = await supabaseClient.from('step_logs').select('*');
+    if (!stepErr && Array.isArray(stepList)) {
+      const newStepLogs = {};
       stepList.forEach(s => {
-        if (!store.data.stepLogs[s.date]) store.data.stepLogs[s.date] = { boyfriend: 0, girlfriend: 0 };
-        store.data.stepLogs[s.date][s.user_role] = s.step_count;
+        if (!newStepLogs[s.date]) newStepLogs[s.date] = { boyfriend: 0, girlfriend: 0 };
+        newStepLogs[s.date][s.user_role] = s.step_count;
       });
+      store.data.stepLogs = newStepLogs;
     }
 
     // 3. 체중 기록 불러오기
-    const { data: weightList } = await supabaseClient.from('weight_logs').select('*').order('date', { ascending: true });
-    if (weightList && weightList.length > 0) {
+    const { data: weightList, error: weightErr } = await supabaseClient.from('weight_logs').select('*').order('date', { ascending: true });
+    if (!weightErr && Array.isArray(weightList)) {
       store.data.weightLogs.boyfriend = weightList
         .filter(w => w.user_role === 'boyfriend')
         .map(w => ({ date: w.date, weight: Number(w.weight_kg), baseline: Number(w.baseline_weight) }));
@@ -2742,11 +2745,16 @@ function setupSupabaseRealtime() {
     });
 }
 
-// 화면 복귀 (앱 전환/잠금 해제/네트워크 복구) 시 즉각 자동 동기화
+// 화면 복귀 (앱 전환/잠금 해제/네트워크 복구) 시 즉각 자동 동기화 및 WakeLock 재요청
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && supabaseClient) {
-    loadFromSupabase();
-    setupSupabaseRealtime();
+  if (!document.hidden) {
+    if (isTimerRunning) {
+      enableScreenWakeLock();
+    }
+    if (supabaseClient) {
+      loadFromSupabase();
+      setupSupabaseRealtime();
+    }
   }
 });
 window.addEventListener('focus', () => {
