@@ -1664,7 +1664,7 @@ function openEditMissionModal(missionId) {
   openModal('modal-mission-edit');
 }
 
-function saveMissionData() {
+async function saveMissionData() {
   const editId = document.getElementById('mission-edit-id').value;
   const title = document.getElementById('mission-title-input').value.trim();
   const target = parseInt(document.getElementById('mission-target-input').value, 10);
@@ -1699,7 +1699,7 @@ function saveMissionData() {
 
   store.save();
   const targetM = editId ? store.data.missions.find(item => item.id === editId) : store.data.missions[store.data.missions.length - 1];
-  if (targetM) syncMissionToSupabase(targetM);
+  if (targetM) await syncMissionToSupabase(targetM);
 
   sfx.playSuccess();
   closeModal('modal-mission-edit');
@@ -1810,7 +1810,7 @@ function openEditWishlistModal(id) {
   openModal('modal-wishlist-edit');
 }
 
-function saveWishlistData() {
+async function saveWishlistData() {
   const editId = document.getElementById('wishlist-edit-id').value;
   const title = document.getElementById('wishlist-title-input').value.trim();
   const memo = document.getElementById('wishlist-memo-input').value.trim();
@@ -1847,7 +1847,7 @@ function saveWishlistData() {
 
   store.save();
   const targetItem = editId ? store.data.foodWishlist.find(w => w.id === editId) : store.data.foodWishlist[store.data.foodWishlist.length - 1];
-  if (targetItem) syncWishlistToSupabase(targetItem);
+  if (targetItem) await syncWishlistToSupabase(targetItem);
 
   sfx.playSuccess();
   closeModal('modal-wishlist-edit');
@@ -2088,7 +2088,7 @@ function openEditCouponModal(couponId) {
   openModal('modal-coupon-edit');
 }
 
-function saveCouponData() {
+async function saveCouponData() {
   const editId = document.getElementById('coupon-edit-id').value;
   const title = document.getElementById('coupon-title-input').value.trim();
   const requiredHearts = parseInt(document.getElementById('coupon-hearts-input').value, 10);
@@ -2115,7 +2115,7 @@ function saveCouponData() {
 
   store.save();
   const targetCp = editId ? store.data.coupons.find(item => item.id === editId) : store.data.coupons[store.data.coupons.length - 1];
-  if (targetCp) syncCouponToSupabase(targetCp);
+  if (targetCp) await syncCouponToSupabase(targetCp);
 
   sfx.playSuccess();
   closeModal('modal-coupon-edit');
@@ -2561,7 +2561,7 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 7. 보상 쿠폰 불러오기
-    const { data: couponList, error: coupErr } = await supabaseClient.from('reward_box').select('*');
+    const { data: couponList, error: coupErr } = await supabaseClient.from('reward_box').select('*').order('required_hearts', { ascending: true });
     if (!coupErr && Array.isArray(couponList) && couponList.length > 0) {
       store.data.coupons = couponList.map(c => ({
         id: c.id,
