@@ -173,7 +173,7 @@ const DEFAULT_STATE = {
   dietLogs: [],
   missions: [
     {
-      id: 'e1a2b3c4-d5e6-4789-8012-3456789abcde',
+      id: '11111111-1111-4111-8111-111111111111',
       title: '이번 주 5일 걷기/러닝 달성하기 👟',
       target: 5,
       unit: '일',
@@ -182,7 +182,7 @@ const DEFAULT_STATE = {
       penalty: '진 사람이 주말에 달콤한 디저트 사주기 🍰'
     },
     {
-      id: 'f2b3c4d5-e6f7-4890-9123-456789abcdef',
+      id: '22222222-2222-4222-8222-222222222222',
       title: '스쿼트 총 200개 채우기 🏋️',
       target: 200,
       unit: '개',
@@ -192,49 +192,14 @@ const DEFAULT_STATE = {
     }
   ],
   cheers: [],
-  penalties: [
-    {
-      id: 'p1a2b3c4-d5e6-4789-8012-3456789abcde',
-      title: '진 사람이 주말에 달콤한 디저트 사주기 🍰',
-      loser: 'boyfriend',
-      loserName: '오동원 🏃‍♂️',
-      targetName: '김해솔 🐰',
-      fromMission: '이번 주 5일 걷기/러닝 달성하기 👟',
-      completed: false,
-      completedAt: null,
-      createdAt: '2025-10-20'
-    }
-  ],
+  penalties: [],
   coupons: [
-    { id: 'c1a2b3c4-d5e6-4789-8012-3456789abcde', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
-    { id: 'c2b3c4d5-e6f7-4890-9123-456789abcdef', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
-    { id: 'c3c4d5e6-f7a8-4901-0234-56789abcdef0', title: '💆 주말 전신 힐링 마사지 30분권', requiredHearts: 20, unlocked: false, used: false },
-    { id: 'c4d5e6f7-a8b9-4012-1345-6789abcdef01', title: '🎬 영화관 VIP 팝콘 세트 데이트권', requiredHearts: 30, unlocked: false, used: false }
+    { id: '33333333-3333-4333-8333-333333333331', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
+    { id: '33333333-3333-4333-8333-333333333332', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
+    { id: '33333333-3333-4333-8333-333333333333', title: '💆 주말 전신 힐링 마사지 30분권', requiredHearts: 20, unlocked: false, used: false },
+    { id: '33333333-3333-4333-8333-333333333334', title: '🎬 영화관 VIP 팝콘 세트 데이트권', requiredHearts: 30, unlocked: false, used: false }
   ],
-  foodWishlist: [
-    {
-      id: 'w1a2b3c4-d5e6-4789-8012-3456789abcde',
-      title: '연남동 숙성 삼겹살 & 김치말이국수 🥩',
-      category: '고기/구이 🥩',
-      authorRole: 'boyfriend',
-      authorName: '오동원 🏃‍♂️',
-      memo: '다이어트 끝나고 첫 번째 치팅데이 1순위!',
-      isEaten: false,
-      eatenDate: null,
-      createdAt: '2025-10-20'
-    },
-    {
-      id: 'w2b3c4d5-e6f7-4890-9123-456789abcdef',
-      title: '망원동 소금빵 & 생딸기 생크림 케이크 🍓🍰',
-      category: '디저트/카페 🍰',
-      authorRole: 'girlfriend',
-      authorName: '김해솔 🐰',
-      memo: '해솔이가 찜해둔 달콤한 디저트 맛집',
-      isEaten: false,
-      eatenDate: null,
-      createdAt: '2025-10-20'
-    }
-  ]
+  foodWishlist: []
 };
 
 // State Manager
@@ -256,6 +221,15 @@ class AppStore {
       if (!Array.isArray(data.penalties)) data.penalties = [];
       if (!Array.isArray(data.coupons)) data.coupons = [];
       if (!Array.isArray(data.foodWishlist)) data.foodWishlist = [];
+
+      // 더미/샘플 위시리스트 및 벌칙 즉시 영구 제거
+      data.foodWishlist = data.foodWishlist.filter(w =>
+        w && w.id && !w.id.startsWith('w1') && !w.id.startsWith('w2') && !w.id.startsWith('w_')
+      );
+      data.penalties = data.penalties.filter(p =>
+        p && p.id && !p.id.startsWith('p1') && !p.id.startsWith('p_')
+      );
+
       if (!data.pins) {
         data.pins = { boyfriend: '1234', girlfriend: '1234' };
       }
@@ -279,6 +253,17 @@ class AppStore {
     }
   }
   cleanSampleData() {
+    // 기존에 생성되었던 더미/샘플 위시리스트 및 벌칙 정리
+    if (this.data.foodWishlist && Array.isArray(this.data.foodWishlist)) {
+      this.data.foodWishlist = this.data.foodWishlist.filter(w =>
+        w && w.id && !w.id.startsWith('w1') && !w.id.startsWith('w2') && !w.id.startsWith('w_')
+      );
+    }
+    if (this.data.penalties && Array.isArray(this.data.penalties)) {
+      this.data.penalties = this.data.penalties.filter(p =>
+        p && p.id && !p.id.startsWith('p1') && !p.id.startsWith('p_')
+      );
+    }
     // 기존에 생성되었던 더미/샘플 데이터 제거 (초기화)
     if (!this.data.isCleaned) {
       this.data.attendance = {};
@@ -289,8 +274,8 @@ class AppStore {
       this.data.missions.forEach(m => { m.bfProgress = 0; m.gfProgress = 0; });
       this.data.coupons.forEach(c => { c.unlocked = false; c.used = false; });
       this.data.isCleaned = true;
-      this.save();
     }
+    this.save();
   }
   resetAll() {
     const supabaseConfig = { ...this.data.supabase };
@@ -1203,7 +1188,7 @@ function saveDietLog() {
   const targetDate = selectedDietDate || getTodayStr();
 
   const newLog = {
-    id: 'd_' + Date.now(),
+    id: generateUUID(),
     role: store.data.currentRole,
     date: targetDate,
     mealType: selectedMealType,
@@ -1523,7 +1508,7 @@ function confirmSettleWinner(winnerRole) {
 
   // 벌칙 등록
   const newPenalty = {
-    id: 'p_' + Date.now(),
+    id: generateUUID(),
     title: m.penalty,
     loser: loserRole,
     loserName,
@@ -1607,7 +1592,7 @@ function savePenaltyData() {
     }
   } else {
     const newPenalty = {
-      id: 'p_' + Date.now(),
+      id: generateUUID(),
       title,
       loser,
       loserName,
@@ -1987,7 +1972,7 @@ function sendCheerMessage(msgText) {
   const timeStr = `${now.getHours() >= 12 ? '오후' : '오전'} ${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const newCheer = {
-    id: 'c_' + Date.now(),
+    id: generateUUID(),
     sender: role,
     senderName,
     message: msgText,
@@ -2119,7 +2104,7 @@ function saveCouponData() {
     }
   } else {
     const newCoupon = {
-      id: 'cp_' + Date.now(),
+      id: generateUUID(),
       title,
       requiredHearts,
       unlocked: false,
@@ -2536,8 +2521,8 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 4. 식단 불러오기
-    const { data: dietList } = await supabaseClient.from('diet_logs').select('*').order('created_at', { ascending: true });
-    if (dietList && dietList.length > 0) {
+    const { data: dietList, error: dietErr } = await supabaseClient.from('diet_logs').select('*').order('created_at', { ascending: true });
+    if (!dietErr && Array.isArray(dietList)) {
       store.data.dietLogs = dietList.map(d => ({
         id: d.id,
         role: d.user_role,
@@ -2550,8 +2535,8 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 5. 칭찬 불러오기
-    const { data: cheerList } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
-    if (cheerList && cheerList.length > 0) {
+    const { data: cheerList, error: cheerErr } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
+    if (!cheerErr && Array.isArray(cheerList)) {
       store.data.cheers = cheerList.map(c => ({
         id: c.id,
         sender: c.sender_role,
@@ -2562,8 +2547,8 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 6. 미션 불러오기
-    const { data: missionList } = await supabaseClient.from('missions').select('*');
-    if (missionList && missionList.length > 0) {
+    const { data: missionList, error: missErr } = await supabaseClient.from('missions').select('*');
+    if (!missErr && Array.isArray(missionList) && missionList.length > 0) {
       store.data.missions = missionList.map(m => ({
         id: m.id,
         title: m.title,
@@ -2576,8 +2561,8 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 7. 보상 쿠폰 불러오기
-    const { data: couponList } = await supabaseClient.from('reward_box').select('*');
-    if (couponList && couponList.length > 0) {
+    const { data: couponList, error: coupErr } = await supabaseClient.from('reward_box').select('*');
+    if (!coupErr && Array.isArray(couponList) && couponList.length > 0) {
       store.data.coupons = couponList.map(c => ({
         id: c.id,
         title: c.title,
@@ -2589,8 +2574,8 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 8. 벌칙 목록 불러오기
-    const { data: penaltyList } = await supabaseClient.from('penalties').select('*').order('created_at', { ascending: false });
-    if (penaltyList && penaltyList.length > 0) {
+    const { data: penaltyList, error: penErr } = await supabaseClient.from('penalties').select('*').order('created_at', { ascending: false });
+    if (!penErr && Array.isArray(penaltyList)) {
       store.data.penalties = penaltyList.map(p => ({
         id: p.id,
         title: p.title,
@@ -2621,8 +2606,8 @@ async function loadFromSupabase(silent = false) {
 
     // 10. 먹방 위시리스트 불러오기
     try {
-      const { data: wishList } = await supabaseClient.from('food_wishlist').select('*').order('created_at', { ascending: false });
-      if (wishList && wishList.length > 0) {
+      const { data: wishList, error: wishErr } = await supabaseClient.from('food_wishlist').select('*').order('created_at', { ascending: false });
+      if (!wishErr && Array.isArray(wishList)) {
         store.data.foodWishlist = wishList.map(w => ({
           id: w.id,
           title: w.title,
