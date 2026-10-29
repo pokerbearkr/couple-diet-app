@@ -2451,6 +2451,8 @@ function closeModal(id) {
 
 // --- 12. Supabase Cloud Backend & Realtime Synchronization ---
 let supabaseClient = null;
+let realtimeChannel = null;
+let autoSyncInterval = null;
 
 function initSupabase() {
   const url = store.data.supabase.url;
@@ -2463,6 +2465,7 @@ function initSupabase() {
       updateCloudSyncStatusBadge(true);
       setupSupabaseRealtime();
       loadFromSupabase();
+      startAutoSyncPolling();
     } catch (e) {
       console.error('Supabase init error:', e);
       updateCloudSyncStatusBadge(false);
@@ -2472,11 +2475,21 @@ function initSupabase() {
   }
 }
 
+function startAutoSyncPolling() {
+  if (autoSyncInterval) clearInterval(autoSyncInterval);
+  // 포그라운드 상태일 때 3.5초마다 백그라운드 자동 갱신 (새로고침 완전 불필요)
+  autoSyncInterval = setInterval(() => {
+    if (!document.hidden && supabaseClient) {
+      loadFromSupabase(true);
+    }
+  }, 3500);
+}
+
 function updateCloudSyncStatusBadge(isConnected) {
   const badge = document.getElementById('cloud-sync-status');
   if (badge) {
     if (isConnected) {
-      badge.innerHTML = '☁️ 실시간 연동 중';
+      badge.innerHTML = '☁️ 실시간 동기화 ON (0초 자동 갱신)';
       badge.style.color = '#2E7D32';
       badge.style.background = '#E8F5E9';
     } else {
@@ -2487,7 +2500,7 @@ function updateCloudSyncStatusBadge(isConnected) {
   }
 }
 
-async function loadFromSupabase() {
+async function loadFromSupabase(silent = false) {
   if (!supabaseClient) return;
   try {
     // 1. 출석 불러오기
@@ -2627,10 +2640,15 @@ async function loadFromSupabase() {
     }
 
     store.save();
-    renderHomeScreen();
-    if (currentTab === 'stats') renderStatsScreen();
-    if (currentTab === 'diet') renderDietScreen();
-    if (currentTab === 'missions') renderMissionsScreen();
+
+    // 사용자가 입력 중이 아닐 때 부드럽게 화면 갱신
+    const isTyping = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+    if (!isTyping) {
+      renderHomeScreen();
+      if (currentTab === 'stats') renderStatsScreen();
+      if (currentTab === 'diet') renderDietScreen();
+      if (currentTab === 'missions') renderMissionsScreen();
+    }
   } catch (err) {
     console.error('Supabase load error:', err);
   }
@@ -2671,9 +2689,15 @@ function showSystemNotification(title, body) {
 function setupSupabaseRealtime() {
   if (!supabaseClient) return;
 
-  // 모든 핵심 테이블 실시간 구독
-  supabaseClient
-    .channel('couple_realtime_all')
+  if (realtimeChannel) {
+    try {
+      supabaseClient.removeChannel(realtimeChannel);
+    } catch (e) {}
+  }
+
+  // 모든 핵심 테이블 실시간 WebSocket 구독
+  realtimeChannel = supabaseClient
+    .channel('couple_realtime_all_' + Date.now())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
       loadFromSupabase();
       sfx.playSuccess();
@@ -2724,8 +2748,34 @@ function setupSupabaseRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'food_wishlist' }, () => {
       loadFromSupabase();
     })
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        updateCloudSyncStatusBadge(true);
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        updateCloudSyncStatusBadge(false);
+      }
+    });
 }
+
+// 화면 복귀 (앱 전환/잠금 해제/네트워크 복구) 시 즉각 자동 동기화
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && supabaseClient) {
+    loadFromSupabase();
+    setupSupabaseRealtime();
+  }
+});
+window.addEventListener('focus', () => {
+  if (supabaseClient) loadFromSupabase();
+});
+window.addEventListener('pageshow', () => {
+  if (supabaseClient) loadFromSupabase();
+});
+window.addEventListener('online', () => {
+  if (supabaseClient) {
+    loadFromSupabase();
+    setupSupabaseRealtime();
+  }
+});
 
 // --- Supabase 개별 동기화 헬퍼 함수들 ---
 async function syncAttendanceToSupabase(date, role, isCompleted) {
