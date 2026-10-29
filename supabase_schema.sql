@@ -125,6 +125,20 @@ CREATE TABLE IF NOT EXISTS public.couple_pins (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 12. 다이어트 후 먹방/맛집 위시리스트 테이블
+CREATE TABLE IF NOT EXISTS public.food_wishlist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    couple_id UUID REFERENCES public.couples(id) ON DELETE SET NULL,
+    title VARCHAR(120) NOT NULL,
+    category VARCHAR(30) DEFAULT '기타',
+    author_role VARCHAR(20) NOT NULL,
+    author_name VARCHAR(50) NOT NULL,
+    memo VARCHAR(250),
+    is_eaten BOOLEAN DEFAULT false,
+    eaten_date DATE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ========================================================
 -- RLS (보안 정책) 활성화 및 커플 앱 읽기/쓰기 권한 허용
 -- ========================================================
@@ -139,6 +153,7 @@ ALTER TABLE public.cheers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reward_box ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.penalties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.couple_pins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.food_wishlist ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all access to couples" ON public.couples;
 DROP POLICY IF EXISTS "Allow all access to profiles" ON public.profiles;
@@ -151,6 +166,7 @@ DROP POLICY IF EXISTS "Allow all access to cheers" ON public.cheers;
 DROP POLICY IF EXISTS "Allow all access to reward_box" ON public.reward_box;
 DROP POLICY IF EXISTS "Allow all access to penalties" ON public.penalties;
 DROP POLICY IF EXISTS "Allow all access to couple_pins" ON public.couple_pins;
+DROP POLICY IF EXISTS "Allow all access to food_wishlist" ON public.food_wishlist;
 
 CREATE POLICY "Allow all access to couples" ON public.couples FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
@@ -163,6 +179,7 @@ CREATE POLICY "Allow all access to cheers" ON public.cheers FOR ALL USING (true)
 CREATE POLICY "Allow all access to reward_box" ON public.reward_box FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to penalties" ON public.penalties FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all access to couple_pins" ON public.couple_pins FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all access to food_wishlist" ON public.food_wishlist FOR ALL USING (true) WITH CHECK (true);
 
 -- 실시간 (Realtime) 동기화 활성화
 ALTER PUBLICATION supabase_realtime SET TABLE
@@ -174,4 +191,5 @@ ALTER PUBLICATION supabase_realtime SET TABLE
     public.missions,
     public.reward_box,
     public.penalties,
-    public.couple_pins;
+    public.couple_pins,
+    public.food_wishlist;

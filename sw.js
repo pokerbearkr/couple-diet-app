@@ -1,5 +1,5 @@
 // Service Worker for CoupleFit PWA
-const CACHE_NAME = 'couplefit-v4.1';
+const CACHE_NAME = 'couplefit-v4.2';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

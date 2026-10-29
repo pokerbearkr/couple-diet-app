@@ -1009,6 +1009,36 @@ body {
   cursor: default;
 }
 
+/* 먹방 위시리스트 카드 */
+.wishlist-card {
+  background: #FFF;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wishlist-card.completed {
+  background: #F9FBE7;
+  border-color: #DCEDC8;
+}
+
+.wishlist-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: #FFF3E0;
+  color: #E65100;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 /* 운동 루틴 & 인터벌 타이머 */
 .timer-circle-container {
   display: flex;

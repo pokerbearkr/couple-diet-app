@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=4.1">
+  <link rel="stylesheet" href="style.css?v=4.2">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -456,7 +456,34 @@
           </div>
         </div>
 
-        <!-- 2. 보상 상자 (데이트 쿠폰) -->
+        <!-- 2. 다이어트 후 먹방 위시리스트 (치팅 & 맛집 버킷리스트) -->
+        <div class="card">
+          <div class="card-title-row">
+            <div>
+              <div class="card-title"><span>🍕</span> 다이어트 후 먹방 위시리스트</div>
+              <span class="card-subtitle">목표 달성 후 둘이서 꼭 갈 맛집 & 치팅 메뉴</span>
+            </div>
+            <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem; background:linear-gradient(135deg, #FF7043, #F4511E);" onclick="openCreateWishlistModal()">+ 맛집/메뉴 추가</button>
+          </div>
+
+          <!-- 위시리스트 필터 (가고 싶은 곳 vs 정복 완료) -->
+          <div class="sub-segment-bar">
+            <button id="wishlist-tab-pending" class="sub-segment-btn active" onclick="switchWishlistSubTab('pending')">
+              <span>😋 가고 싶은 곳</span>
+              <span id="wishlist-pending-cnt" class="sub-segment-badge">0</span>
+            </button>
+            <button id="wishlist-tab-completed" class="sub-segment-btn" onclick="switchWishlistSubTab('completed')">
+              <span>🎉 정복 완료!</span>
+              <span id="wishlist-completed-cnt" class="sub-segment-badge">0</span>
+            </button>
+          </div>
+
+          <div id="wishlist-list-container" style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+
+        <!-- 3. 보상 상자 (데이트 쿠폰) -->
         <div class="card">
           <div class="card-title-row">
             <div>
@@ -487,7 +514,7 @@
           </div>
         </div>
 
-        <!-- 3. 주고받은 칭찬 메시지 및 직접 입력 -->
+        <!-- 4. 주고받은 칭찬 메시지 및 직접 입력 -->
         <div class="card">
           <div class="card-title"><span>💬</span> 실시간 응원 메시지</div>
           <div class="inline-send-bar" style="margin: 10px 0 12px;">
@@ -887,6 +914,44 @@
       </div>
     </div>
 
+    <!-- 모달: 다이어트 후 먹방 위시리스트 등록/수정 -->
+    <div id="modal-wishlist-edit" class="modal-overlay">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; position:sticky; top:-20px; background:#FFF; padding-top:4px; padding-bottom:8px; z-index:10; border-bottom:1px solid #F0F0F0; margin-top:-4px;">
+          <h3 id="modal-wishlist-title-text" style="font-size:1.05rem; color:var(--text-main); font-weight:800; margin:0;">🍕 먹방 위시리스트 등록</h3>
+          <button class="icon-btn" onclick="closeModal('modal-wishlist-edit')" style="border:none; width:30px; height:30px; font-size:1rem; cursor:pointer;">✕</button>
+        </div>
+
+        <input type="hidden" id="wishlist-edit-id" value="" />
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.75rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">음식 / 맛집 이름 *</label>
+          <input type="text" id="wishlist-title-input" class="input-field" placeholder="예: 연남동 숙성 삼겹살 & 김치말이국수 🥩" style="width:100%; font-size:0.85rem;" />
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:0.75rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">음식 카테고리</label>
+          <div class="meal-type-chips" style="margin-bottom:0;" id="wishlist-category-chips">
+            <button type="button" class="meal-chip active wishlist-cat-btn" data-cat="고기/구이 🥩" onclick="selectWishlistCategory('고기/구이 🥩')">고기/구이 🥩</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="일식/스시 🍣" onclick="selectWishlistCategory('일식/스시 🍣')">일식/스시 🍣</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="디저트/카페 🍰" onclick="selectWishlistCategory('디저트/카페 🍰')">디저트 🍰</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="양식/피자 🍕" onclick="selectWishlistCategory('양식/피자 🍕')">양식/피자 🍕</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="중식/마라 🥟" onclick="selectWishlistCategory('중식/마라 🥟')">중식/마라 🥟</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="야식/치맥 🍗" onclick="selectWishlistCategory('야식/치맥 🍗')">야식/치맥 🍗</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="분식/떡볶이 🍢" onclick="selectWishlistCategory('분식/떡볶이 🍢')">분식 🍢</button>
+            <button type="button" class="meal-chip wishlist-cat-btn" data-cat="한식/찌개 🍲" onclick="selectWishlistCategory('한식/찌개 🍲')">한식 🍲</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.75rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">메모 / 위치 (선택)</label>
+          <input type="text" id="wishlist-memo-input" class="input-field" placeholder="예: 홍대입구역 3번 출구, 치팅데이 1순위!" style="width:100%; font-size:0.85rem;" />
+        </div>
+
+        <button class="btn-primary" style="width:100%; padding:12px; font-size:0.88rem; background:linear-gradient(135deg, #FF7043, #F4511E);" onclick="saveWishlistData()">위시리스트 저장하기 😋</button>
+      </div>
+    </div>
+
     <!-- 모달: 사진 확대 라이트박스 & 다운로드 -->
     <div id="modal-photo-lightbox" class="modal-overlay lightbox-modal" onclick="closePhotoLightbox(event)">
       <div class="lightbox-content" onclick="event.stopPropagation()">
@@ -979,6 +1044,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=4.1"></script>
+  <script src="app.js?v=4.2"></script>
 </body>
 </html>

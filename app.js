@@ -135,7 +135,18 @@ class SoundEffects {
 }
 const sfx = new SoundEffects();
 
-// --- 2. Initial State & Local Storage Data Store ---
+// --- 2. UUID Generator Helper ---
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// --- 3. Initial State & Local Storage Data Store ---
 const DEFAULT_STATE = {
   currentRole: 'boyfriend', // 'boyfriend' | 'girlfriend'
   couple: {
@@ -162,7 +173,7 @@ const DEFAULT_STATE = {
   dietLogs: [],
   missions: [
     {
-      id: 'm1',
+      id: 'e1a2b3c4-d5e6-4789-8012-3456789abcde',
       title: '이번 주 5일 걷기/러닝 달성하기 👟',
       target: 5,
       unit: '일',
@@ -171,7 +182,7 @@ const DEFAULT_STATE = {
       penalty: '진 사람이 주말에 달콤한 디저트 사주기 🍰'
     },
     {
-      id: 'm2',
+      id: 'f2b3c4d5-e6f7-4890-9123-456789abcdef',
       title: '스쿼트 총 200개 채우기 🏋️',
       target: 200,
       unit: '개',
@@ -183,7 +194,7 @@ const DEFAULT_STATE = {
   cheers: [],
   penalties: [
     {
-      id: 'p1',
+      id: 'p1a2b3c4-d5e6-4789-8012-3456789abcde',
       title: '진 사람이 주말에 달콤한 디저트 사주기 🍰',
       loser: 'boyfriend',
       loserName: '오동원 🏃‍♂️',
@@ -195,10 +206,34 @@ const DEFAULT_STATE = {
     }
   ],
   coupons: [
-    { id: 'cp1', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
-    { id: 'cp2', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
-    { id: 'cp3', title: '💆 주말 전신 힐링 마사지 30분권', requiredHearts: 20, unlocked: false, used: false },
-    { id: 'cp4', title: '🎬 영화관 VIP 팝콘 세트 데이트권', requiredHearts: 30, unlocked: false, used: false }
+    { id: 'c1a2b3c4-d5e6-4789-8012-3456789abcde', title: '☕ 스타벅스 커피 & 조각케이크 쿠폰', requiredHearts: 5, unlocked: false, used: false },
+    { id: 'c2b3c4d5-e6f7-4890-9123-456789abcdef', title: '🥩 치팅데이 삼겹살/오마카세 데이트권', requiredHearts: 12, unlocked: false, used: false },
+    { id: 'c3c4d5e6-f7a8-4901-0234-56789abcdef0', title: '💆 주말 전신 힐링 마사지 30분권', requiredHearts: 20, unlocked: false, used: false },
+    { id: 'c4d5e6f7-a8b9-4012-1345-6789abcdef01', title: '🎬 영화관 VIP 팝콘 세트 데이트권', requiredHearts: 30, unlocked: false, used: false }
+  ],
+  foodWishlist: [
+    {
+      id: 'w1a2b3c4-d5e6-4789-8012-3456789abcde',
+      title: '연남동 숙성 삼겹살 & 김치말이국수 🥩',
+      category: '고기/구이 🥩',
+      authorRole: 'boyfriend',
+      authorName: '오동원 🏃‍♂️',
+      memo: '다이어트 끝나고 첫 번째 치팅데이 1순위!',
+      isEaten: false,
+      eatenDate: null,
+      createdAt: '2025-10-20'
+    },
+    {
+      id: 'w2b3c4d5-e6f7-4890-9123-456789abcdef',
+      title: '망원동 소금빵 & 생딸기 생크림 케이크 🍓🍰',
+      category: '디저트/카페 🍰',
+      authorRole: 'girlfriend',
+      authorName: '김해솔 🐰',
+      memo: '해솔이가 찜해둔 달콤한 디저트 맛집',
+      isEaten: false,
+      eatenDate: null,
+      createdAt: '2025-10-20'
+    }
   ]
 };
 
@@ -220,6 +255,7 @@ class AppStore {
       };
       if (!Array.isArray(data.penalties)) data.penalties = [];
       if (!Array.isArray(data.coupons)) data.coupons = [];
+      if (!Array.isArray(data.foodWishlist)) data.foodWishlist = [];
       if (!data.pins) {
         data.pins = { boyfriend: '1234', girlfriend: '1234' };
       }
@@ -1327,9 +1363,11 @@ function renderMissionsScreen() {
             </div>
             <div style="display:flex; gap:4px; align-items:center;">
               ${m.target >= 20 ? `
+                <button class="btn-primary" style="padding:4px 6px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="incrementMission('${m.id}', -10)">-10</button>
                 <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 10)">+10</button>
                 <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 50)">+50</button>
               ` : `
+                <button class="btn-primary" style="padding:4px 6px; font-size:0.75rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="incrementMission('${m.id}', -1)">-1</button>
                 <button class="btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="incrementMission('${m.id}', 1)">+1 ${m.unit}</button>
               `}
               <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="promptCustomMissionAmount('${m.id}')">✏️ 직접입력</button>
@@ -1344,7 +1382,10 @@ function renderMissionsScreen() {
   // 2. 벌칙 수행 / 내역 렌더링
   renderPenaltiesList();
 
-  // 3. 칭찬 피드
+  // 3. 먹방 위시리스트 렌더링
+  renderWishlist();
+
+  // 4. 칭찬 피드
   const cheerContainer = document.getElementById('cheer-messages-list');
   if (cheerContainer) {
     cheerContainer.innerHTML = '';
@@ -1660,7 +1701,7 @@ function saveMissionData() {
   } else {
     // 신규 생성
     const newMission = {
-      id: 'm_' + Date.now(),
+      id: generateUUID(),
       title,
       target,
       unit,
@@ -1695,9 +1736,9 @@ function incrementMission(missionId, amount = 1) {
 
   const role = store.data.currentRole;
   if (role === 'boyfriend') {
-    m.bfProgress = Math.max(0, m.bfProgress + amount);
+    m.bfProgress = Math.max(0, (Number(m.bfProgress) || 0) + amount);
   } else {
-    m.gfProgress = Math.max(0, m.gfProgress + amount);
+    m.gfProgress = Math.max(0, (Number(m.gfProgress) || 0) + amount);
   }
 
   store.save();
@@ -1713,15 +1754,218 @@ function promptCustomMissionAmount(missionId) {
   if (!m) return;
 
   const role = store.data.currentRole;
-  const currentVal = role === 'boyfriend' ? m.bfProgress : m.gfProgress;
-  const input = prompt(`[${m.title}]\n추가할 수량을 입력하세요 (현재: ${currentVal}/${m.target}${m.unit})`, '20');
+  const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+  const currentVal = role === 'boyfriend' ? (m.bfProgress || 0) : (m.gfProgress || 0);
+  const input = prompt(`[${m.title}]\n${roleName}의 진행 수량을 입력하세요:\n- 숫자를 바로 입력 (예: 50 입력 시 50으로 변경)\n- 또는 +10, -5 형태로 입력 시 가감됩니다. (현재: ${currentVal}/${m.target}${m.unit})`, `${currentVal}`);
 
-  if (input !== null) {
-    const amount = parseInt(input, 10);
-    if (!isNaN(amount) && amount !== 0) {
-      incrementMission(missionId, amount);
+  if (input !== null && input.trim() !== '') {
+    const trimmed = input.trim();
+    if (trimmed.startsWith('+') || trimmed.startsWith('-')) {
+      const delta = parseInt(trimmed, 10);
+      if (!isNaN(delta)) {
+        incrementMission(missionId, delta);
+      }
+    } else {
+      const exact = parseInt(trimmed, 10);
+      if (!isNaN(exact) && exact >= 0) {
+        if (role === 'boyfriend') {
+          m.bfProgress = exact;
+        } else {
+          m.gfProgress = exact;
+        }
+        store.save();
+        syncMissionProgressToSupabase(m);
+        sfx.playSuccess();
+        createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 10);
+        renderMissionsScreen();
+      }
     }
   }
+}
+
+// --- 먹방 위시리스트 관리 로직 ---
+let currentWishlistSubTab = 'pending'; // 'pending' | 'completed'
+let selectedWishlistCategory = '고기/구이 🥩';
+
+function switchWishlistSubTab(tab) {
+  currentWishlistSubTab = tab;
+  const pBtn = document.getElementById('wishlist-tab-pending');
+  const cBtn = document.getElementById('wishlist-tab-completed');
+  if (pBtn) pBtn.classList.toggle('active', tab === 'pending');
+  if (cBtn) cBtn.classList.toggle('active', tab === 'completed');
+  renderWishlist();
+}
+
+function selectWishlistCategory(cat) {
+  selectedWishlistCategory = cat;
+  document.querySelectorAll('.wishlist-cat-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cat === cat);
+  });
+}
+
+function openCreateWishlistModal() {
+  document.getElementById('modal-wishlist-title-text').innerText = '🍕 먹방 위시리스트 등록';
+  document.getElementById('wishlist-edit-id').value = '';
+  document.getElementById('wishlist-title-input').value = '';
+  document.getElementById('wishlist-memo-input').value = '';
+  selectWishlistCategory('고기/구이 🥩');
+  openModal('modal-wishlist-edit');
+}
+
+function openEditWishlistModal(id) {
+  if (!store.data.foodWishlist) store.data.foodWishlist = [];
+  const item = store.data.foodWishlist.find(w => w.id === id);
+  if (!item) return;
+
+  document.getElementById('modal-wishlist-title-text').innerText = '🍕 먹방 위시리스트 수정';
+  document.getElementById('wishlist-edit-id').value = item.id;
+  document.getElementById('wishlist-title-input').value = item.title;
+  document.getElementById('wishlist-memo-input').value = item.memo || '';
+  selectWishlistCategory(item.category || '기타 😋');
+  openModal('modal-wishlist-edit');
+}
+
+function saveWishlistData() {
+  const editId = document.getElementById('wishlist-edit-id').value;
+  const title = document.getElementById('wishlist-title-input').value.trim();
+  const memo = document.getElementById('wishlist-memo-input').value.trim();
+  const category = selectedWishlistCategory || '기타 😋';
+
+  if (!title) return alert('음식 또는 맛집 이름을 입력해주세요!');
+
+  if (!store.data.foodWishlist) store.data.foodWishlist = [];
+
+  const role = store.data.currentRole;
+  const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️' : '김해솔 🐰';
+
+  if (editId) {
+    const item = store.data.foodWishlist.find(w => w.id === editId);
+    if (item) {
+      item.title = title;
+      item.category = category;
+      item.memo = memo;
+    }
+  } else {
+    const newItem = {
+      id: generateUUID(),
+      title,
+      category,
+      authorRole: role,
+      authorName: roleName,
+      memo,
+      isEaten: false,
+      eatenDate: null,
+      createdAt: new Date().toISOString()
+    };
+    store.data.foodWishlist.push(newItem);
+  }
+
+  store.save();
+  const targetItem = editId ? store.data.foodWishlist.find(w => w.id === editId) : store.data.foodWishlist[store.data.foodWishlist.length - 1];
+  if (targetItem) syncWishlistToSupabase(targetItem);
+
+  sfx.playSuccess();
+  closeModal('modal-wishlist-edit');
+  renderWishlist();
+}
+
+function toggleWishlistEaten(id) {
+  if (!store.data.foodWishlist) store.data.foodWishlist = [];
+  const item = store.data.foodWishlist.find(w => w.id === id);
+  if (!item) return;
+
+  item.isEaten = !item.isEaten;
+  item.eatenDate = item.isEaten ? getTodayStr() : null;
+
+  store.save();
+  syncWishlistToSupabase(item);
+
+  if (item.isEaten) {
+    sfx.playSuccess();
+    createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 25);
+    alert(`🎉 '${item.title}' 정복 완료!\n다이어트 목표 달성을 축하합니다! 🍽️✨`);
+  } else {
+    sfx.playBeep();
+  }
+
+  renderWishlist();
+}
+
+function deleteWishlist(id) {
+  if (confirm('이 위시리스트 항목을 삭제하시겠습니까?')) {
+    if (!store.data.foodWishlist) store.data.foodWishlist = [];
+    store.data.foodWishlist = store.data.foodWishlist.filter(w => w.id !== id);
+    store.save();
+    deleteWishlistFromSupabase(id);
+    renderWishlist();
+  }
+}
+
+function renderWishlist() {
+  if (!store.data.foodWishlist) {
+    store.data.foodWishlist = [];
+  }
+
+  const list = store.data.foodWishlist;
+  const pendingItems = list.filter(w => !w.isEaten);
+  const completedItems = list.filter(w => w.isEaten);
+
+  const pendingCntEl = document.getElementById('wishlist-pending-cnt');
+  const completedCntEl = document.getElementById('wishlist-completed-cnt');
+  if (pendingCntEl) pendingCntEl.innerText = pendingItems.length;
+  if (completedCntEl) completedCntEl.innerText = completedItems.length;
+
+  const container = document.getElementById('wishlist-list-container');
+  if (!container) return;
+
+  const targetList = currentWishlistSubTab === 'pending' ? pendingItems : completedItems;
+
+  if (targetList.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+        ${currentWishlistSubTab === 'pending' ? '😋 아직 등록된 먹방 위시리스트가 없어요.<br>우측 상단 <b>+ 맛집/메뉴 추가</b>로 가고 싶은 맛집을 등록해보세요!' : '🎉 아직 정복 완료한 맛집이 없어요.<br>다이어트가 끝나면 가고 싶은 곳을 하나씩 정복해보세요! 🍽️'}
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+  targetList.forEach(item => {
+    const card = document.createElement('div');
+    card.className = `wishlist-card ${item.isEaten ? 'completed' : ''}`;
+
+    const isGf = item.authorRole === 'girlfriend';
+    const authorColor = isGf ? '#D81B60' : '#1976D2';
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span class="wishlist-tag">${item.category || '기타 😋'}</span>
+          <span style="font-size:0.72rem; font-weight:700; color:${authorColor};">${item.authorName || (isGf ? '김해솔 🐰' : '오동원 🏃‍♂️')} 픽</span>
+        </div>
+        <div style="display:flex; gap:4px;">
+          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditWishlistModal('${item.id}')" title="수정">✏️</button>
+          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deleteWishlist('${item.id}')" title="삭제">🗑️</button>
+        </div>
+      </div>
+
+      <div style="font-size:0.95rem; font-weight:800; color:var(--text-main);">
+        ${item.title}
+      </div>
+
+      ${item.memo ? `<div style="font-size:0.75rem; color:var(--text-muted); background:#F8F9FA; padding:6px 10px; border-radius:8px;">📝 ${item.memo}</div>` : ''}
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+        <span style="font-size:0.7rem; color:var(--text-light);">
+          ${item.isEaten ? `🎉 ${item.eatenDate || ''} 정복 완료` : '😋 다이어트 종료 대기 중'}
+        </span>
+        <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem; ${item.isEaten ? 'background:#ECEFF1; color:#546E7A; box-shadow:none;' : 'background:linear-gradient(135deg, #FF7043, #F4511E);'}" onclick="toggleWishlistEaten('${item.id}')">
+          ${item.isEaten ? '↩️ 다시 가고 싶어요' : '🍽️ 정복 완료 체크!'}
+        </button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
 }
 
 // --- 응원 메시지 직접 입력 및 프리셋 전송 ---
@@ -2362,6 +2606,26 @@ async function loadFromSupabase() {
       console.warn('couple_pins fetch warning:', e);
     }
 
+    // 10. 먹방 위시리스트 불러오기
+    try {
+      const { data: wishList } = await supabaseClient.from('food_wishlist').select('*').order('created_at', { ascending: false });
+      if (wishList && wishList.length > 0) {
+        store.data.foodWishlist = wishList.map(w => ({
+          id: w.id,
+          title: w.title,
+          category: w.category || '기타 😋',
+          authorRole: w.author_role || 'boyfriend',
+          authorName: w.author_name || (w.author_role === 'girlfriend' ? '김해솔 🐰' : '오동원 🏃‍♂️'),
+          memo: w.memo || '',
+          isEaten: !!w.is_eaten,
+          eatenDate: w.eaten_date || null,
+          createdAt: w.created_at
+        }));
+      }
+    } catch (e) {
+      console.warn('food_wishlist fetch warning:', e);
+    }
+
     store.save();
     renderHomeScreen();
     if (currentTab === 'stats') renderStatsScreen();
@@ -2456,6 +2720,9 @@ function setupSupabaseRealtime() {
         store.data.pins[payload.new.user_role] = String(payload.new.pin);
         store.save();
       }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_wishlist' }, () => {
+      loadFromSupabase();
     })
     .subscribe();
 }
@@ -2567,8 +2834,8 @@ async function syncCheerToSupabase(newCheer) {
 async function syncMissionToSupabase(m) {
   if (!supabaseClient) return;
   try {
-    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id);
     const row = {
+      id: m.id,
       title: m.title,
       target_count: m.target,
       unit: m.unit,
@@ -2576,7 +2843,6 @@ async function syncMissionToSupabase(m) {
       user2_progress: m.gfProgress,
       penalty_reward: m.penalty
     };
-    if (isNumericId) row.id = m.id;
     await supabaseClient.from('missions').upsert(row);
   } catch (e) {
     console.error('Supabase mission sync error:', e);
@@ -2586,13 +2852,16 @@ async function syncMissionToSupabase(m) {
 async function syncMissionProgressToSupabase(m) {
   if (!supabaseClient) return;
   try {
-    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id);
-    if (isNumericId) {
-      await supabaseClient.from('missions').update({
-        user1_progress: m.bfProgress,
-        user2_progress: m.gfProgress
-      }).eq('id', m.id);
-    }
+    const row = {
+      id: m.id,
+      title: m.title,
+      target_count: m.target,
+      unit: m.unit,
+      user1_progress: m.bfProgress,
+      user2_progress: m.gfProgress,
+      penalty_reward: m.penalty
+    };
+    await supabaseClient.from('missions').upsert(row);
   } catch (e) {
     console.error('Supabase mission progress sync error:', e);
   }
@@ -2601,12 +2870,37 @@ async function syncMissionProgressToSupabase(m) {
 async function deleteMissionFromSupabase(missionId) {
   if (!supabaseClient) return;
   try {
-    const isNumericId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(missionId);
-    if (isNumericId) {
-      await supabaseClient.from('missions').delete().eq('id', missionId);
-    }
+    await supabaseClient.from('missions').delete().eq('id', missionId);
   } catch (e) {
     console.error('Supabase mission delete error:', e);
+  }
+}
+
+async function syncWishlistToSupabase(item) {
+  if (!supabaseClient) return;
+  try {
+    const row = {
+      id: item.id,
+      title: item.title,
+      category: item.category || '기타 😋',
+      author_role: item.authorRole || 'boyfriend',
+      author_name: item.authorName || '오동원 🏃‍♂️',
+      memo: item.memo || '',
+      is_eaten: !!item.isEaten,
+      eaten_date: item.eatenDate || null
+    };
+    await supabaseClient.from('food_wishlist').upsert(row);
+  } catch (e) {
+    console.error('Supabase wishlist sync error:', e);
+  }
+}
+
+async function deleteWishlistFromSupabase(id) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('food_wishlist').delete().eq('id', id);
+  } catch (e) {
+    console.error('Supabase wishlist delete error:', e);
   }
 }
 
