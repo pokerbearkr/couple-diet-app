@@ -307,8 +307,35 @@ function getDateOffsetStr(offsetDays) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function formatKoreanDate(dateStr) {
+  if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
   return `${parseInt(m)}월 ${parseInt(d)}일`;
+}
+function formatCheerTimestamp(createdIsoOrDate) {
+  if (!createdIsoOrDate) return '';
+  const d = new Date(createdIsoOrDate);
+  if (isNaN(d.getTime())) return createdIsoOrDate;
+
+  const today = new Date();
+  const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate();
+
+  const hour = d.getHours();
+  const ampm = hour >= 12 ? '오후' : '오전';
+  const hour12 = hour % 12 || 12;
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const timePart = `${ampm} ${hour12}:${min}`;
+
+  if (isToday) {
+    return `오늘 ${timePart}`;
+  } else if (isYesterday) {
+    return `어제 ${timePart}`;
+  } else {
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${timePart}`;
+  }
 }
 function calculateDday(targetDateStr) {
   const target = new Date(targetDateStr);
@@ -1376,7 +1403,7 @@ function renderMissionsScreen() {
   // 3. 먹방 위시리스트 렌더링
   renderWishlist();
 
-  // 4. 칭찬 피드
+  // 4. 칭찬 피드 (날짜 + 시간 표시)
   const cheerContainer = document.getElementById('cheer-messages-list');
   if (cheerContainer) {
     cheerContainer.innerHTML = '';
@@ -1387,15 +1414,16 @@ function renderMissionsScreen() {
         </div>
       `;
     } else {
-      store.data.cheers.slice(-5).reverse().forEach(c => {
+      store.data.cheers.slice(-12).reverse().forEach(c => {
         const msgBox = document.createElement('div');
         msgBox.className = 'cheer-msg-card';
+        const displayTime = c.createdAt ? formatCheerTimestamp(c.createdAt) : (c.time || '');
         msgBox.innerHTML = `
-          <div>
+          <div style="flex:1;">
             <span style="font-weight:700; color:${c.sender === 'boyfriend' ? '#1976D2' : '#D81B60'};">${c.senderName}</span>:
-            <span>${c.message}</span>
+            <span style="color:var(--text-main); font-weight:500;">${c.message}</span>
           </div>
-          <span style="font-size:0.7rem; color:var(--text-light);">${c.time}</span>
+          <span style="font-size:0.7rem; color:var(--text-light); white-space:nowrap; margin-left:8px; font-weight:600;">${displayTime}</span>
         `;
         cheerContainer.appendChild(msgBox);
       });
@@ -1977,13 +2005,14 @@ async function sendCheerMessage(msgText) {
   const senderName = role === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
 
   const now = new Date();
-  const timeStr = `${now.getHours() >= 12 ? '오후' : '오전'} ${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const timeStr = formatCheerTimestamp(now);
 
   const newCheer = {
     id: generateUUID(),
     sender: role,
     senderName,
     message: msgText,
+    createdAt: now.toISOString(),
     time: timeStr
   };
   store.data.cheers.push(newCheer);
@@ -2564,7 +2593,7 @@ async function loadFromSupabase(silent = false) {
       })).reverse();
     }
 
-    // 5. 칭찬 불러오기
+    // 5. 칭찬 불러오기 (날짜 및 시간 포함)
     const { data: cheerList, error: cheerErr } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
     if (!cheerErr && Array.isArray(cheerList)) {
       store.data.cheers = cheerList.map(c => ({
@@ -2572,7 +2601,8 @@ async function loadFromSupabase(silent = false) {
         sender: c.sender_role,
         senderName: c.sender_name,
         message: c.message,
-        time: new Date(c.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        createdAt: c.created_at,
+        time: formatCheerTimestamp(c.created_at)
       }));
     }
 
