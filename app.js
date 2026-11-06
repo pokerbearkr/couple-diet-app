@@ -161,7 +161,7 @@ const DEFAULT_STATE = {
     connected: false
   },
   pins: {
-    boyfriend: '1234',
+    boyfriend: '1349',
     girlfriend: '1234'
   },
   attendance: {},
@@ -2435,11 +2435,25 @@ function toggleVoiceEnabled(enabled) {
 // --- 11. Modal Window Helpers ---
 function openModal(id) {
   const modal = document.getElementById(id);
-  if (modal) modal.classList.add('active');
+  if (modal) {
+    modal.classList.add('active');
+    if (id === 'modal-settings') {
+      updateSettingsModalUI();
+    }
+  }
 }
 function closeModal(id) {
   const modal = document.getElementById(id);
   if (modal) modal.classList.remove('active');
+}
+
+function updateSettingsModalUI() {
+  const role = store.data.currentRole;
+  const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️ (남친)' : '김해솔 🐰 (여친)';
+  const pinHeader = document.getElementById('my-pin-setting-header');
+  if (pinHeader) {
+    pinHeader.innerText = `🔒 [${roleName}] 4자리 비밀번호(PIN) 변경`;
+  }
 }
 
 // --- 12. Supabase Cloud Backend & Realtime Synchronization ---
