@@ -247,11 +247,18 @@ class AppStore {
   }
   save() {
     try {
-      localStorage.setItem('couple_fit_data', JSON.stringify(this.data));
+      // 날짜 필터로 서버에서 임시로 불러온 과거 식단(_older)은 용량 절약을 위해 로컬에 저장하지 않음
+      const persistData = Array.isArray(this.data.dietLogs) && this.data.dietLogs.some(d => d && d._older)
+        ? { ...this.data, dietLogs: this.data.dietLogs.filter(d => !(d && d._older)) }
+        : this.data;
+      localStorage.setItem('couple_fit_data', JSON.stringify(persistData));
     } catch (e) {
       console.warn('LocalStorage quota warning, saving lean version:', e);
       try {
         const leanData = { ...this.data };
+        if (Array.isArray(leanData.dietLogs)) {
+          leanData.dietLogs = leanData.dietLogs.filter(d => !(d && d._older));
+        }
         if (Array.isArray(leanData.dietLogs) && leanData.dietLogs.length > 5) {
           leanData.dietLogs = leanData.dietLogs.slice(-5);
         }
@@ -305,6 +312,19 @@ function getDateOffsetStr(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// 이번 주 시작 시각 (월요일 00:00, 기기 로컬 시간 기준)
+function getWeekStartDate(baseDate = new Date()) {
+  const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+  const day = d.getDay(); // 0=일 ... 6=토
+  const diffToMonday = (day + 6) % 7;
+  d.setDate(d.getDate() - diffToMonday);
+  return d;
+}
+// 해당 시각이 정확히 '월요일 00:00:00.000' 인지 (주간 미션 기간 표식 여부 판별용)
+function isWeekStartMoment(dateObj) {
+  return dateObj.getDay() === 1 && dateObj.getHours() === 0 && dateObj.getMinutes() === 0 &&
+    dateObj.getSeconds() === 0 && dateObj.getMilliseconds() === 0;
 }
 function formatKoreanDate(dateStr) {
   if (!dateStr) return '';
@@ -444,8 +464,8 @@ function updateStreakAndRate() {
   let streak = 0;
   let checkDate = new Date();
 
-  // 스트릭 계산 (연속 출석일수)
-  for (let i = 0; i < 60; i++) {
+  // 스트릭 계산 (연속 출석일수) - 상한 없이 끊길 때까지 계산 (안전장치: 최대 10년)
+  for (let i = 0; i < 3660; i++) {
     const dStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
     const rec = history[dStr];
     const isCompleted = rec && (store.data.currentRole === 'boyfriend' ? rec.boyfriend : rec.girlfriend);
@@ -732,6 +752,7 @@ function selectDateFromPicker(dateStr) {
   } else if (activePickerTarget === 'filter') {
     selectedDietFilterDate = dateStr;
     renderDietScreen();
+    loadDietLogsForFilterDate(dateStr);
   }
 
   closeModal('modal-custom-datepicker');
@@ -757,6 +778,7 @@ function setQuickDietFilter(offset) {
   selectedDietFilterDate = getDateOffsetStr(offset);
   sfx.playSuccess();
   renderDietScreen();
+  loadDietLogsForFilterDate(selectedDietFilterDate);
 }
 
 function updateStepUI() {
@@ -976,6 +998,15 @@ function renderDietScreen() {
 
   if (selectedDietFilterDate) {
     logs = logs.filter(item => item.date === selectedDietFilterDate);
+  }
+
+  if (logs.length === 0 && selectedDietFilterDate && dietFilterLoadingDate === selectedDietFilterDate) {
+    container.innerHTML = `
+      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: 0.85rem;">
+        ☁️ <b>${formatDatePretty(selectedDietFilterDate)}</b> 식단 기록을 불러오는 중...
+      </div>
+    `;
+    return;
   }
 
   if (logs.length === 0) {
@@ -1305,6 +1336,7 @@ function switchCouponSubTab(subTab) {
 }
 
 function renderMissionsScreen() {
+  applyWeeklyMissionResetLocal();
   const activeMissionsCount = store.data.missions.length;
   const pendingPenalties = store.data.penalties.filter(p => !p.completed);
   const completedPenalties = store.data.penalties.filter(p => p.completed);
@@ -1356,7 +1388,7 @@ function renderMissionsScreen() {
                 <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</span>
                 ${isGoalReached ? `<span style="background:#E8F5E9; color:#2E7D32; font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px;">🎉 목표 도달!</span>` : ''}
               </div>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit} · 매주 월요일 0시 초기화</div>
             </div>
             <div style="display:flex; gap:4px;">
               <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditMissionModal('${m.id}')" title="수정">✏️</button>
@@ -1571,7 +1603,7 @@ async function confirmSettleWinner(winnerRole) {
 
   await Promise.all([
     syncPenaltyToSupabase(newPenalty),
-    syncMissionProgressToSupabase(m)
+    resetMissionProgressInSupabase(m)
   ]);
 }
 
@@ -1728,7 +1760,8 @@ async function saveMissionData() {
       unit,
       bfProgress: 0,
       gfProgress: 0,
-      penalty
+      penalty,
+      periodStart: getWeekStartDate().toISOString()
     };
     store.data.missions.push(newMission);
   }
@@ -1763,7 +1796,7 @@ function incrementMission(missionId, amount = 1) {
   }
 
   store.save();
-  syncMissionProgressToSupabase(m);
+  syncMyMissionProgressToSupabase(m, role);
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 10);
@@ -1795,7 +1828,7 @@ function promptCustomMissionAmount(missionId) {
           m.gfProgress = exact;
         }
         store.save();
-        syncMissionProgressToSupabase(m);
+        syncMyMissionProgressToSupabase(m, role);
         sfx.playSuccess();
         createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 10);
         renderMissionsScreen();
@@ -2536,6 +2569,67 @@ function updateCloudSyncStatusBadge(isConnected) {
   }
 }
 
+// --- 식단 기록 헬퍼 (최신 30개 + 필터 날짜 추가 조회) ---
+let dietFilterLoadingDate = '';
+
+function mapDietRow(d) {
+  return {
+    id: d.id,
+    role: d.user_role,
+    date: d.date,
+    mealType: d.meal_type,
+    photoUrl: d.photo_url,
+    memo: d.memo,
+    createdAt: d.created_at
+  };
+}
+
+// 특정 날짜의 식단 기록을 서버에서 조회 (실패 시 null)
+async function fetchDietRowsForDate(dateStr) {
+  if (!supabaseClient || !dateStr) return null;
+  try {
+    const { data, error } = await supabaseClient
+      .from('diet_logs')
+      .select('*')
+      .eq('date', dateStr)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.warn('diet_logs date fetch error:', error);
+      return null;
+    }
+    return Array.isArray(data) ? data.map(mapDietRow) : null;
+  } catch (e) {
+    console.warn('diet_logs date fetch error:', e);
+    return null;
+  }
+}
+
+// 기본 목록에 없는 기록만 _older 표시를 붙여 합치고 작성순으로 정렬
+function mergeDietLogs(baseLogs, extraLogs) {
+  const ids = new Set(baseLogs.map(d => d.id));
+  const extras = extraLogs.filter(d => !ids.has(d.id)).map(d => ({ ...d, _older: true }));
+  if (extras.length === 0) return baseLogs;
+  return [...baseLogs, ...extras].sort((a, b) =>
+    String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+  );
+}
+
+// 날짜 필터 선택 시 해당 날짜 기록을 서버에서 바로 불러와 표시
+async function loadDietLogsForFilterDate(dateStr) {
+  if (!supabaseClient || !dateStr) return;
+  dietFilterLoadingDate = dateStr;
+  if (currentTab === 'diet') renderDietScreen();
+
+  const dayLogs = await fetchDietRowsForDate(dateStr);
+  if (dietFilterLoadingDate === dateStr) dietFilterLoadingDate = '';
+  if (dayLogs && selectedDietFilterDate === dateStr) {
+    // 이 날짜로 이전에 불러온 과거 기록은 서버 기준으로 교체 (삭제 반영)
+    const base = store.data.dietLogs.filter(d => !(d._older && d.date === dateStr));
+    store.data.dietLogs = mergeDietLogs(base, dayLogs);
+  }
+  if (currentTab === 'diet') renderDietScreen();
+}
+
 async function loadFromSupabase(silent = false) {
   if (!supabaseClient) return;
   try {
@@ -2582,15 +2676,13 @@ async function loadFromSupabase(silent = false) {
       .order('created_at', { ascending: false })
       .limit(30);
     if (!dietErr && Array.isArray(dietList)) {
-      store.data.dietLogs = dietList.map(d => ({
-        id: d.id,
-        role: d.user_role,
-        date: d.date,
-        mealType: d.meal_type,
-        photoUrl: d.photo_url,
-        memo: d.memo,
-        createdAt: d.created_at
-      })).reverse();
+      let dietLogs = dietList.map(mapDietRow).reverse();
+      // 날짜 필터 사용 중이면 최신 30개에 없는 그 날짜의 과거 기록도 함께 유지
+      if (selectedDietFilterDate) {
+        const dayLogs = await fetchDietRowsForDate(selectedDietFilterDate);
+        if (dayLogs) dietLogs = mergeDietLogs(dietLogs, dayLogs);
+      }
+      store.data.dietLogs = dietLogs;
     }
 
     // 5. 칭찬 불러오기 (날짜 및 시간 포함)
@@ -2607,17 +2699,36 @@ async function loadFromSupabase(silent = false) {
     }
 
     // 6. 미션 불러오기
-    const { data: missionList, error: missErr } = await supabaseClient.from('missions').select('*');
+    let { data: missionList, error: missErr } = await supabaseClient.from('missions').select('*');
     if (!missErr && Array.isArray(missionList) && missionList.length > 0) {
-      store.data.missions = missionList.map(m => ({
-        id: m.id,
-        title: m.title,
-        target: m.target_count,
-        unit: m.unit || '회',
-        bfProgress: m.user1_progress || 0,
-        gfProgress: m.user2_progress || 0,
-        penalty: m.penalty_reward
-      }));
+      // 주가 바뀌었으면 진행도 초기화 (여러 기기가 동시에 해도 한 번만 적용됨)
+      const resetApplied = await applyWeeklyMissionResetRemote(missionList);
+      if (resetApplied) {
+        const refetch = await supabaseClient.from('missions').select('*');
+        if (!refetch.error && Array.isArray(refetch.data)) missionList = refetch.data;
+      }
+
+      const prevMissions = new Map(store.data.missions.map(x => [x.id, x]));
+      const myKey = store.data.currentRole === 'boyfriend' ? 'bfProgress' : 'gfProgress';
+      store.data.missions = missionList.map(m => {
+        const mapped = {
+          id: m.id,
+          title: m.title,
+          target: m.target_count,
+          unit: m.unit || '회',
+          bfProgress: m.user1_progress || 0,
+          gfProgress: m.user2_progress || 0,
+          penalty: m.penalty_reward,
+          periodStart: m.created_at
+        };
+        // 방금 내가 누른 진행도가 아직 서버에 반영 전이면 내 값은 로컬 값을 유지 (연타 시 숫자 튐 방지)
+        const prev = prevMissions.get(m.id);
+        if (prev && prev._pendingUntil && prev._pendingUntil > Date.now()) {
+          mapped[myKey] = prev[myKey];
+          mapped._pendingUntil = prev._pendingUntil;
+        }
+        return mapped;
+      });
     }
 
     // 7. 보상 쿠폰 불러오기
@@ -2931,40 +3042,125 @@ async function syncCheerToSupabase(newCheer) {
   }
 }
 
+// 미션 제목/목표/단위/벌칙 저장 (진행도는 건드리지 않음 → 상대방 진행도 덮어쓰기 방지)
 async function syncMissionToSupabase(m) {
   if (!supabaseClient) return;
   try {
-    const row = {
-      id: m.id,
+    const { data, error } = await supabaseClient.from('missions').update({
       title: m.title,
       target_count: m.target,
       unit: m.unit,
-      user1_progress: m.bfProgress,
-      user2_progress: m.gfProgress,
       penalty_reward: m.penalty
-    };
-    await supabaseClient.from('missions').upsert(row);
+    }).eq('id', m.id).select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      // 서버에 아직 없는 미션 → 새로 생성
+      await insertMissionToSupabase(m);
+    }
   } catch (e) {
     console.error('Supabase mission sync error:', e);
   }
 }
 
-async function syncMissionProgressToSupabase(m) {
+// 서버에 미션 새로 만들기 (created_at = 이번 주 월요일 0시 → 주간 기간 표식으로 사용)
+async function insertMissionToSupabase(m) {
+  const { error } = await supabaseClient.from('missions').upsert({
+    id: m.id,
+    title: m.title,
+    target_count: m.target,
+    unit: m.unit,
+    user1_progress: m.bfProgress || 0,
+    user2_progress: m.gfProgress || 0,
+    penalty_reward: m.penalty,
+    created_at: getWeekStartDate().toISOString()
+  });
+  if (error) throw error;
+}
+
+// 내 진행도 칸만 업데이트 (오동원=user1_progress, 김해솔=user2_progress)
+async function syncMyMissionProgressToSupabase(m, role) {
+  m._pendingUntil = Date.now() + 6000;
   if (!supabaseClient) return;
+  const column = role === 'boyfriend' ? 'user1_progress' : 'user2_progress';
+  const value = role === 'boyfriend' ? m.bfProgress : m.gfProgress;
   try {
-    const row = {
-      id: m.id,
-      title: m.title,
-      target_count: m.target,
-      unit: m.unit,
-      user1_progress: m.bfProgress,
-      user2_progress: m.gfProgress,
-      penalty_reward: m.penalty
-    };
-    await supabaseClient.from('missions').upsert(row);
+    const { data, error } = await supabaseClient.from('missions')
+      .update({ [column]: value })
+      .eq('id', m.id)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      await insertMissionToSupabase(m);
+    }
   } catch (e) {
     console.error('Supabase mission progress sync error:', e);
   }
+}
+
+// 승부 정산 후 두 사람 진행도 0으로 초기화
+async function resetMissionProgressInSupabase(m) {
+  if (!supabaseClient) return;
+  try {
+    const { error } = await supabaseClient.from('missions')
+      .update({ user1_progress: 0, user2_progress: 0 })
+      .eq('id', m.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Supabase mission reset error:', e);
+  }
+}
+
+// 주간 리셋 (서버 모드): missions.created_at 을 '이번 주 기간 시작(월요일 0시)' 표식으로 사용
+// - 표식이 지난주 이전이면 → 진행도 0 + 표식을 이번 주로 (조건부 업데이트라 여러 기기가 동시에 실행해도 1번만 적용)
+// - 이전 버전에서 만든 미션(표식 없음)이면 → 진행도는 유지하고 이번 주 표식만 붙임
+async function applyWeeklyMissionResetRemote(missionRows) {
+  if (!supabaseClient || !Array.isArray(missionRows)) return false;
+  const weekStart = getWeekStartDate();
+  const weekStartIso = weekStart.toISOString();
+  let changed = false;
+
+  for (const row of missionRows) {
+    const ts = row.created_at ? new Date(row.created_at) : null;
+    if (ts && !isNaN(ts.getTime()) && ts.getTime() >= weekStart.getTime()) continue;
+
+    try {
+      if (ts && !isNaN(ts.getTime()) && isWeekStartMoment(ts)) {
+        const { error } = await supabaseClient.from('missions')
+          .update({ user1_progress: 0, user2_progress: 0, created_at: weekStartIso })
+          .eq('id', row.id)
+          .lt('created_at', weekStartIso);
+        if (!error) changed = true;
+      } else {
+        let q = supabaseClient.from('missions').update({ created_at: weekStartIso }).eq('id', row.id);
+        q = row.created_at ? q.eq('created_at', row.created_at) : q.is('created_at', null);
+        const { error } = await q;
+        if (!error) changed = true;
+      }
+    } catch (e) {
+      console.warn('weekly mission reset warning:', e);
+    }
+  }
+  return changed;
+}
+
+// 주간 리셋 (로컬 모드 전용)
+function applyWeeklyMissionResetLocal() {
+  if (supabaseClient || !Array.isArray(store.data.missions)) return;
+  const weekStart = getWeekStartDate();
+  let changed = false;
+  store.data.missions.forEach(m => {
+    const ps = m.periodStart ? new Date(m.periodStart) : null;
+    if (!ps || isNaN(ps.getTime())) {
+      m.periodStart = weekStart.toISOString(); // 기존 미션은 이번 주부터 관리 시작
+      changed = true;
+    } else if (ps.getTime() < weekStart.getTime()) {
+      m.bfProgress = 0;
+      m.gfProgress = 0;
+      m.periodStart = weekStart.toISOString();
+      changed = true;
+    }
+  });
+  if (changed) store.save();
 }
 
 async function deleteMissionFromSupabase(missionId) {
