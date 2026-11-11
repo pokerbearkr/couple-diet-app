@@ -135,6 +135,34 @@ class SoundEffects {
 }
 const sfx = new SoundEffects();
 
+// --- 1-1. HTML escape & ⋯ 더보기 메뉴 헬퍼 ---
+function escapeHtml(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// items: [{ label, action, danger }]  → 수정/삭제 같은 보조 동작을 ⋯ 버튼 하나로 묶음
+function moreMenuHtml(items) {
+  const buttons = items.map(it =>
+    `<button class="more-item${it.danger ? ' danger' : ''}" onclick="closeMoreMenus(); ${it.action}">${it.label}</button>`
+  ).join('');
+  return `<div class="more-wrap"><button class="more-btn" aria-label="더보기" onclick="toggleMoreMenu(this, event)">⋯</button><div class="more-menu">${buttons}</div></div>`;
+}
+function toggleMoreMenu(btn, e) {
+  if (e) e.stopPropagation();
+  const menu = btn.nextElementSibling;
+  const wasOpen = menu.classList.contains('open');
+  closeMoreMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+function closeMoreMenus() {
+  document.querySelectorAll('.more-menu.open').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest || !e.target.closest('.more-wrap')) closeMoreMenus();
+});
+
 // --- 2. UUID Generator Helper ---
 function generateUUID() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -420,7 +448,13 @@ function renderHomeScreen() {
 
   // D-Day 업데이트 (2026년 6월 13일 기준)
   const ddayEl = document.getElementById('couple-dday');
-  if (ddayEl) ddayEl.innerText = calculateDday(store.data.couple.ddayDate);
+  if (ddayEl) {
+    const fullDday = calculateDday(store.data.couple.ddayDate);
+    const m = fullDday.match(/D[+-]?\d+/);
+    ddayEl.innerText = m ? `💕 ${m[0]}` : '💕 1일';
+    ddayEl.title = fullDday;
+  }
+  renderCheerFeed();
 
   // 사용자 전환 버튼 상태
   const bfBtn = document.getElementById('switch-bf');
@@ -495,7 +529,9 @@ function updateStreakAndRate() {
   const streakEl = document.getElementById('streak-count');
   const weeklyRateEl = document.getElementById('weekly-rate');
   if (streakEl) streakEl.innerText = `${streak}일 연속`;
-  if (weeklyRateEl) weeklyRateEl.innerText = `${weeklyRate}% (${weekSuccessCount}/7일)`;
+  if (weeklyRateEl) weeklyRateEl.innerText = `${weeklyRate}%`;
+  const weeklyLblEl = document.getElementById('weekly-rate-lbl');
+  if (weeklyLblEl) weeklyLblEl.innerText = `7일 중 ${weekSuccessCount}일 운동`;
 }
 
 function jumpToCurrentMonth() {
@@ -660,7 +696,7 @@ function openCustomDatePicker(target) {
     filter: '🔍 식단 모아볼 날짜 선택'
   };
   const titleEl = document.getElementById('modal-datepicker-title');
-  if (titleEl) titleEl.innerText = titleMap[target] || '📅 날짜 선택';
+  if (titleEl) titleEl.innerText = titleMap[target] || '🗓️ 날짜 선택';
 
   renderPickerCalendar();
   openModal('modal-custom-datepicker');
@@ -758,6 +794,36 @@ function selectDateFromPicker(dateStr) {
   closeModal('modal-custom-datepicker');
 }
 
+// ‹ › 버튼으로 하루씩 이동 (미래 날짜로는 이동 불가)
+function shiftPickerDate(target, delta) {
+  const today = getTodayStr();
+  const current = {
+    step: selectedStepDate,
+    weight: selectedWeightDate,
+    diet: selectedDietDate,
+    filter: selectedDietFilterDate
+  }[target] || today;
+  const [y, m, d] = current.split('-').map(Number);
+  const next = new Date(y, m - 1, d + delta);
+  const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+  if (nextStr > today) return;
+  sfx.playSuccess();
+  if (target === 'step') { selectedStepDate = nextStr; updateStepUI(); }
+  else if (target === 'weight') { selectedWeightDate = nextStr; updateWeightUI(); }
+  else if (target === 'diet') { selectedDietDate = nextStr; updateDietInputUI(); }
+  else if (target === 'filter') {
+    selectedDietFilterDate = nextStr;
+    renderDietScreen();
+    loadDietLogsForFilterDate(nextStr);
+  }
+}
+
+// 오늘이 선택된 경우 › 버튼 비활성화
+function refreshDateNextButton(target, dateStr) {
+  const btn = document.getElementById(`${target}-date-next`);
+  if (btn) btn.disabled = !!dateStr && dateStr >= getTodayStr();
+}
+
 // 퀵 날짜 셋팅 헬퍼
 function setQuickStepDate(offset) {
   selectedStepDate = getDateOffsetStr(offset);
@@ -784,6 +850,7 @@ function setQuickDietFilter(offset) {
 function updateStepUI() {
   const lbl = document.getElementById('step-date-label');
   if (lbl) lbl.innerText = formatDatePretty(selectedStepDate);
+  refreshDateNextButton('step', selectedStepDate);
 
   const role = store.data.currentRole;
   const data = store.data.stepLogs[selectedStepDate] || { boyfriend: 0, girlfriend: 0 };
@@ -794,6 +861,7 @@ function updateStepUI() {
 function updateWeightUI() {
   const lbl = document.getElementById('weight-date-label');
   if (lbl) lbl.innerText = formatDatePretty(selectedWeightDate);
+  refreshDateNextButton('weight', selectedWeightDate);
 
   const role = store.data.currentRole;
   const list = store.data.weightLogs[role] || [];
@@ -805,6 +873,7 @@ function updateWeightUI() {
 function updateDietInputUI() {
   const lbl = document.getElementById('diet-date-label');
   if (lbl) lbl.innerText = formatDatePretty(selectedDietDate);
+  refreshDateNextButton('diet', selectedDietDate);
 }
 
 // --- 8. Stats Screen Rendering (비밀번호 보안 잠금) ---
@@ -861,10 +930,10 @@ function renderStatsScreen() {
     const pSign = pDiff > 0 ? `+${pDiff}` : `${pDiff}`;
     if (partnerDeltaDisplay) {
       partnerDeltaDisplay.innerHTML = `
-        <div style="font-size:1.15rem; font-weight:800; color:#2E7D32; margin-top:4px;">
-          시작 대비 <span style="font-size:1.35rem;">${pSign} kg</span> 변화 중! ✨
+        <div style="font-size:var(--fs-lg); font-weight:800; color:#2E7D32; margin-top:4px;">
+          시작 대비 <span style="font-size:var(--fs-xl);">${pSign} kg</span> 변화 중! ✨
         </div>
-        <div style="font-size:0.75rem; color:#66BB6A; margin-top:4px;">
+        <div style="font-size:var(--fs-xs); color:#66BB6A; margin-top:4px;">
           🔒 프라이버시 보호: 실제 체중 숫자는 어떤 경우에도 상대방에게 노출되지 않습니다.
         </div>
       `;
@@ -922,56 +991,92 @@ async function saveWeightLog() {
 function drawWeeklyStepChart() {
   const canvas = document.getElementById('weekly-step-chart');
   if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 320;
+  const cssH = canvas.clientHeight || 170;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
   const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
-
-  ctx.clearRect(0, 0, w, h);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
 
   const days = [];
-  for (let i = 6; i >= 0; i--) {
-    days.push(getDateOffsetStr(-i));
-  }
+  for (let i = 6; i >= 0; i--) days.push(getDateOffsetStr(-i));
+  const rows = days.map(d => store.data.stepLogs[d] || { boyfriend: 0, girlfriend: 0 });
 
-  const barWidth = 14;
-  const gap = (w - 40) / 7;
-  const maxStep = 12000;
+  const maxVal = Math.max(0, ...rows.map(r => Math.max(r.boyfriend || 0, r.girlfriend || 0)));
+  const maxStep = Math.max(10000, Math.ceil(maxVal / 5000) * 5000);
 
-  // 가이드라인
-  ctx.strokeStyle = '#F0EAE6';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(20, h - 30);
-  ctx.lineTo(w - 20, h - 30);
-  ctx.stroke();
+  const left = 34, right = 6, top = 10, bottom = 24;
+  const plotW = cssW - left - right;
+  const plotH = cssH - top - bottom;
+  const baseY = top + plotH;
 
-  days.forEach((dStr, idx) => {
-    const data = store.data.stepLogs[dStr] || { boyfriend: 0, girlfriend: 0 };
-    const xCenter = 30 + idx * gap;
+  // 가로 눈금선 + 왼쪽 축 (0, 중간, 최대)
+  ctx.font = '600 12px -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'right';
+  [0, maxStep / 2, maxStep].forEach(v => {
+    const y = baseY - (v / maxStep) * plotH;
+    ctx.strokeStyle = v === 0 ? '#E6DED8' : '#F3EEEA';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, Math.round(y) + 0.5);
+    ctx.lineTo(cssW - right, Math.round(y) + 0.5);
+    ctx.stroke();
+    ctx.fillStyle = '#807B8A';
+    ctx.fillText(v === 0 ? '0' : `${v / 1000}k`, left - 6, y);
+  });
 
-    const bfHeight = Math.min((data.boyfriend / maxStep) * (h - 60), h - 60);
-    const gfHeight = Math.min((data.girlfriend / maxStep) * (h - 60), h - 60);
+  const slot = plotW / 7;
+  const barW = Math.min(14, slot / 2 - 4);
+  const today = getTodayStr();
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
 
-    // 오빠 막대 (Blue)
+  rows.forEach((data, idx) => {
+    const xCenter = left + slot * idx + slot / 2;
+    const bfH = Math.min(((data.boyfriend || 0) / maxStep) * plotH, plotH);
+    const gfH = Math.min(((data.girlfriend || 0) / maxStep) * plotH, plotH);
+
     ctx.fillStyle = '#64B5F6';
     ctx.beginPath();
-    ctx.roundRect(xCenter - barWidth - 2, h - 30 - bfHeight, barWidth, bfHeight, [4, 4, 0, 0]);
+    ctx.roundRect(xCenter - barW - 1.5, baseY - bfH, barW, bfH, [4, 4, 0, 0]);
     ctx.fill();
 
-    // 자기 막대 (Pink)
     ctx.fillStyle = '#FF85A1';
     ctx.beginPath();
-    ctx.roundRect(xCenter + 2, h - 30 - gfHeight, barWidth, gfHeight, [4, 4, 0, 0]);
+    ctx.roundRect(xCenter + 1.5, baseY - gfH, barW, gfH, [4, 4, 0, 0]);
     ctx.fill();
 
-    // 날짜 레이블
-    const dateObj = new Date(dStr);
-    const dayLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-    ctx.fillStyle = '#8E8A98';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(dayLabel, xCenter, h - 12);
+    const [, mm, dd] = days[idx].split('-');
+    const isToday = days[idx] === today;
+    ctx.fillStyle = isToday ? '#3D3A45' : '#807B8A';
+    ctx.font = `${isToday ? '800' : '600'} 12px -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+    ctx.fillText(isToday ? '오늘' : `${parseInt(mm, 10)}/${parseInt(dd, 10)}`, xCenter, cssH - 6);
   });
+
+  // 아래 요약: 오늘 걸음 수 + 7일 평균
+  const summaryEl = document.getElementById('step-chart-summary');
+  if (summaryEl) {
+    const fmt = n => Number(n || 0).toLocaleString('ko-KR');
+    const avg = key => {
+      const logged = rows.filter(r => (r[key] || 0) > 0);
+      return logged.length ? Math.round(logged.reduce((a, r) => a + r[key], 0) / logged.length) : 0;
+    };
+    const todayRow = rows[rows.length - 1];
+    summaryEl.innerHTML = `
+      <div class="step-sum-item">
+        <div class="step-sum-lbl">🏃‍♂️ 오동원 · 오늘</div>
+        <div class="step-sum-val bf">${fmt(todayRow.boyfriend)}보</div>
+        <div class="step-sum-sub">7일 평균 ${fmt(avg('boyfriend'))}보</div>
+      </div>
+      <div class="step-sum-item">
+        <div class="step-sum-lbl">🐰 김해솔 · 오늘</div>
+        <div class="step-sum-val gf">${fmt(todayRow.girlfriend)}보</div>
+        <div class="step-sum-sub">7일 평균 ${fmt(avg('girlfriend'))}보</div>
+      </div>`;
+  }
 }
 
 // --- 8. Feature 4: Diet Photo Diary (No Calorie Stress) ---
@@ -991,8 +1096,11 @@ function renderDietScreen() {
 
   const filterLabel = document.getElementById('diet-filter-label');
   if (filterLabel) {
-    filterLabel.innerText = selectedDietFilterDate ? formatDatePretty(selectedDietFilterDate) : '모든 날짜 보기';
+    filterLabel.innerText = selectedDietFilterDate ? formatDatePretty(selectedDietFilterDate) : '모든 날짜';
   }
+  const filterTrigger = document.getElementById('diet-filter-trigger');
+  if (filterTrigger) filterTrigger.classList.toggle('neutral', !selectedDietFilterDate);
+  refreshDateNextButton('filter', selectedDietFilterDate);
 
   let logs = [...store.data.dietLogs].reverse();
 
@@ -1002,7 +1110,7 @@ function renderDietScreen() {
 
   if (logs.length === 0 && selectedDietFilterDate && dietFilterLoadingDate === selectedDietFilterDate) {
     container.innerHTML = `
-      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: 0.85rem;">
+      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: var(--fs-sm);">
         ☁️ <b>${formatDatePretty(selectedDietFilterDate)}</b> 식단 기록을 불러오는 중...
       </div>
     `;
@@ -1011,8 +1119,8 @@ function renderDietScreen() {
 
   if (logs.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: 0.85rem;">
-        ${selectedDietFilterDate ? `📅 <b>${formatDatePretty(selectedDietFilterDate)}</b>에 등록된 식단 일기가 없어요.` : `🥗 아직 등록된 식단 일기가 없어요.<br>먹은 맛있는 식사를 사진과 함께 남겨보세요!`}
+      <div style="text-align:center; padding: 24px 10px; color: var(--text-muted); font-size: var(--fs-sm);">
+        ${selectedDietFilterDate ? `🗓️ <b>${formatDatePretty(selectedDietFilterDate)}</b>에 등록된 식단 일기가 없어요.` : `🥗 아직 등록된 식단 일기가 없어요.<br>먹은 맛있는 식사를 사진과 함께 남겨보세요!`}
       </div>
     `;
     return;
@@ -1026,26 +1134,20 @@ function renderDietScreen() {
 
     card.innerHTML = `
       ${item.photoUrl ? `
-        <img src="${item.photoUrl}" class="diet-thumb" onclick="openPhotoLightbox('${item.id}')" title="사진 확대 및 다운로드" alt="식단 사진" />
+        <img src="${item.photoUrl}" class="diet-thumb" onclick="openPhotoLightbox('${item.id}')" title="사진 크게 보기" alt="식단 사진" />
       ` : `
-        <div class="diet-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;cursor:default;">🍽️</div>
+        <div class="diet-thumb placeholder">🍽️</div>
       `}
-      <div style="flex:1;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:0.75rem; background:${badgeColor}; padding:2px 8px; border-radius:12px; font-weight:700;">
-            ${authorName} · ${item.mealType}
-          </span>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span style="font-size:0.72rem; color:var(--text-light);">${formatKoreanDate(item.date)}</span>
-            <div class="diet-actions">
-              <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="openEditDietModal('${item.id}')" title="수정">✏️</button>
-              <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="deleteDietLog('${item.id}')" title="삭제">🗑️</button>
-            </div>
-          </div>
+      <div class="diet-item-body">
+        <div class="diet-item-top">
+          <span class="diet-badge ${item.role === 'boyfriend' ? 'bf' : 'gf'}">${escapeHtml(authorName)} · ${escapeHtml(item.mealType)}</span>
+          <span class="diet-date">${formatKoreanDate(item.date)}</span>
+          ${moreMenuHtml([
+            { label: '✏️ 수정', action: `openEditDietModal('${item.id}')` },
+            { label: '🗑️ 삭제', action: `deleteDietLog('${item.id}')`, danger: true }
+          ])}
         </div>
-        <p style="font-size:0.88rem; font-weight:600; color:var(--text-main); margin-top:6px; line-height:1.4;">
-          ${item.memo || '맛있게 건강하게 식사 완료! 😋'}
-        </p>
+        <p class="diet-memo">${escapeHtml(item.memo || '맛있게 건강하게 식사 완료! 😋')}</p>
       </div>
     `;
     container.appendChild(card);
@@ -1065,8 +1167,8 @@ function openPhotoLightbox(dietId) {
   if (captionEl) {
     const authorName = item.role === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName;
     captionEl.innerHTML = `
-      <div style="font-weight:800; font-size:0.95rem; margin-bottom:2px;">${authorName} · ${item.mealType} (${formatKoreanDate(item.date)})</div>
-      <div style="font-size:0.82rem; opacity:0.9;">${item.memo || ''}</div>
+      <div style="font-weight:800; font-size:var(--fs-md); margin-bottom:2px;">${authorName} · ${item.mealType} (${formatKoreanDate(item.date)})</div>
+      <div style="font-size:var(--fs-sm); opacity:0.9;">${item.memo || ''}</div>
     `;
   }
 
@@ -1285,23 +1387,27 @@ let currentCouponSubTab = 'available'; // 'available' | 'history'
 
 function switchMissionSubTab(subTab) {
   currentMissionSubTab = subTab;
-  const mBtn = document.getElementById('mission-tab-active');
-  const pBtn = document.getElementById('mission-tab-penalty');
-  const mView = document.getElementById('missions-active-view');
-  const pView = document.getElementById('penalties-view');
+  switchRewardSection(subTab === 'penalties' ? 'penalties' : 'missions');
+}
 
-  if (subTab === 'missions') {
-    if (mBtn) mBtn.classList.add('active');
-    if (pBtn) pBtn.classList.remove('active');
-    if (mView) mView.style.display = 'block';
-    if (pView) pView.style.display = 'none';
-  } else {
-    if (mBtn) mBtn.classList.remove('active');
-    if (pBtn) pBtn.classList.add('active');
-    if (mView) mView.style.display = 'none';
-    if (pView) pView.style.display = 'block';
-  }
-  renderMissionsScreen();
+// 미션 / 벌칙 / 쿠폰 / 위시리스트 상단 탭 전환 (마지막 탭은 이 기기에 기억)
+let currentRewardSection = (() => {
+  try { return localStorage.getItem('couple_reward_section') || 'missions'; } catch (e) { return 'missions'; }
+})();
+function switchRewardSection(sec) {
+  const sections = ['missions', 'penalties', 'coupons', 'wishlist'];
+  if (!sections.includes(sec)) sec = 'missions';
+  currentRewardSection = sec;
+  try { localStorage.setItem('couple_reward_section', sec); } catch (e) {}
+  sections.forEach(k => {
+    const tab = document.getElementById('rtab-' + k);
+    const box = document.getElementById('rsec-' + k);
+    if (tab) {
+      tab.classList.toggle('active', k === sec);
+      tab.setAttribute('aria-selected', k === sec ? 'true' : 'false');
+    }
+    if (box) box.hidden = k !== sec;
+  });
 }
 
 function setPenaltyFilter(filter) {
@@ -1337,6 +1443,7 @@ function switchCouponSubTab(subTab) {
 
 function renderMissionsScreen() {
   applyWeeklyMissionResetLocal();
+  switchRewardSection(currentRewardSection);
   const activeMissionsCount = store.data.missions.length;
   const pendingPenalties = store.data.penalties.filter(p => !p.completed);
   const completedPenalties = store.data.penalties.filter(p => p.completed);
@@ -1362,13 +1469,18 @@ function renderMissionsScreen() {
   const cHistCnt = document.getElementById('coupon-history-cnt');
   if (cHistCnt) cHistCnt.innerText = historyCoupons.length;
 
+  const rCouponCnt = document.getElementById('rtab-coupon-cnt');
+  if (rCouponCnt) rCouponCnt.innerText = availableCoupons.length;
+  const rWishCnt = document.getElementById('rtab-wish-cnt');
+  if (rWishCnt) rWishCnt.innerText = (store.data.foodWishlist || []).filter(w => !w.isEaten).length;
+
   // 1. 진행 중인 미션 리스트 렌더링
   const missionContainer = document.getElementById('missions-list');
   if (missionContainer) {
     missionContainer.innerHTML = '';
     if (store.data.missions.length === 0) {
       missionContainer.innerHTML = `
-        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
           ⚔️ 아직 등록된 주간 미션이 없어요.<br>우측 상단 <b>'+ 미션 만들기'</b>로 둘만의 대결을 시작해보세요!
         </div>
       `;
@@ -1381,47 +1493,42 @@ function renderMissionsScreen() {
         const gfPct = Math.min((m.gfProgress / m.target) * 100, 100);
         const isGoalReached = (m.bfProgress >= m.target) || (m.gfProgress >= m.target);
 
+        const isBig = m.target >= 20;
         card.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="mission-head">
             <div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${m.title}</span>
-                ${isGoalReached ? `<span style="background:#E8F5E9; color:#2E7D32; font-size:0.7rem; font-weight:800; padding:2px 6px; border-radius:4px;">🎉 목표 도달!</span>` : ''}
-              </div>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">목표: ${m.target}${m.unit} · 매주 월요일 0시 초기화</div>
+              <div class="mission-title">${escapeHtml(m.title)}${isGoalReached ? '<span class="goal-badge">🎉 목표 도달</span>' : ''}</div>
+              <div class="mission-meta">목표 ${m.target}${escapeHtml(m.unit)}</div>
             </div>
-            <div style="display:flex; gap:4px;">
-              <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditMissionModal('${m.id}')" title="수정">✏️</button>
-              <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deleteMission('${m.id}')" title="삭제">🗑️</button>
-            </div>
+            ${moreMenuHtml([
+              { label: '✏️ 수정', action: `openEditMissionModal('${m.id}')` },
+              { label: '🗑️ 삭제', action: `deleteMission('${m.id}')`, danger: true }
+            ])}
           </div>
-          
-          <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; margin-top:10px;">
-            <span style="color:#1976D2;">🏃‍♂️ 오동원: ${m.bfProgress}/${m.target}${m.unit}</span>
-            <span style="color:#D81B60;">🐰 김해솔: ${m.gfProgress}/${m.target}${m.unit}</span>
+
+          <div class="mission-scores">
+            <span class="bf">🏃‍♂️ 오동원 ${m.bfProgress}/${m.target}</span>
+            <span class="gf">🐰 김해솔 ${m.gfProgress}/${m.target}</span>
           </div>
-          
           <div class="mission-progress-bar-bg">
             <div class="mission-bar-bf" style="width: ${bfPct / 2}%;"></div>
             <div class="mission-bar-gf" style="width: ${gfPct / 2}%;"></div>
           </div>
+          <span class="penalty-tag">벌칙: ${escapeHtml(m.penalty)}</span>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:6px;">
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="penalty-tag">벌칙: ${m.penalty}</span>
-              <button class="btn-primary" style="padding:3px 8px; font-size:0.72rem; background:linear-gradient(135deg, #FFB74D, #FF9800);" onclick="openSettleMissionModal('${m.id}')">🏆 승부 정산</button>
-            </div>
-            <div style="display:flex; gap:4px; align-items:center;">
-              ${m.target >= 20 ? `
-                <button class="btn-primary" style="padding:4px 6px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="incrementMission('${m.id}', -10)">-10</button>
-                <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 10)">+10</button>
-                <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem;" onclick="incrementMission('${m.id}', 50)">+50</button>
+          <div class="mission-actions">
+            <div class="step-btns">
+              ${isBig ? `
+                <button class="step-btn minus" onclick="incrementMission('${m.id}', -10)">-10</button>
+                <button class="step-btn" onclick="incrementMission('${m.id}', 10)">+10</button>
+                <button class="step-btn" onclick="incrementMission('${m.id}', 50)">+50</button>
               ` : `
-                <button class="btn-primary" style="padding:4px 6px; font-size:0.75rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="incrementMission('${m.id}', -1)">-1</button>
-                <button class="btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="incrementMission('${m.id}', 1)">+1 ${m.unit}</button>
+                <button class="step-btn minus" onclick="incrementMission('${m.id}', -1)">-1</button>
+                <button class="step-btn" onclick="incrementMission('${m.id}', 1)">+1 ${escapeHtml(m.unit)}</button>
               `}
-              <button class="btn-primary" style="padding:4px 8px; font-size:0.72rem; background:#ECEFF1; color:#37474F; box-shadow:none;" onclick="promptCustomMissionAmount('${m.id}')">✏️ 직접입력</button>
+              <button class="step-btn edit" onclick="promptCustomMissionAmount('${m.id}')" aria-label="직접 입력">✏️</button>
             </div>
+            <button class="settle-btn" onclick="openSettleMissionModal('${m.id}')">🏆 정산</button>
           </div>
         `;
         missionContainer.appendChild(card);
@@ -1435,35 +1542,42 @@ function renderMissionsScreen() {
   // 3. 먹방 위시리스트 렌더링
   renderWishlist();
 
-  // 4. 칭찬 피드 (날짜 + 시간 표시)
-  const cheerContainer = document.getElementById('cheer-messages-list');
-  if (cheerContainer) {
-    cheerContainer.innerHTML = '';
-    if (store.data.cheers.length === 0) {
-      cheerContainer.innerHTML = `
-        <div style="text-align:center; padding:16px 10px; color:var(--text-muted); font-size:0.82rem;">
-          💌 아직 주고받은 응원 메시지가 없어요.<br>위 입력창에 달콤한 응원 한마디를 남겨보세요!
-        </div>
-      `;
-    } else {
-      store.data.cheers.slice(-12).reverse().forEach(c => {
-        const msgBox = document.createElement('div');
-        msgBox.className = 'cheer-msg-card';
-        const displayTime = c.createdAt ? formatCheerTimestamp(c.createdAt) : (c.time || '');
-        msgBox.innerHTML = `
-          <div style="flex:1;">
-            <span style="font-weight:700; color:${c.sender === 'boyfriend' ? '#1976D2' : '#D81B60'};">${c.senderName}</span>:
-            <span style="color:var(--text-main); font-weight:500;">${c.message}</span>
-          </div>
-          <span style="font-size:0.7rem; color:var(--text-light); white-space:nowrap; margin-left:8px; font-weight:600;">${displayTime}</span>
-        `;
-        cheerContainer.appendChild(msgBox);
-      });
-    }
-  }
-
   // 4. 보상 상자 (하트 누적 쿠폰)
   renderCouponList();
+}
+
+// --- 응원 피드 (홈 탭: 최근 5개, '더 보기'로 20개) ---
+let cheerFeedExpanded = false;
+function toggleCheerFeedExpanded() {
+  cheerFeedExpanded = !cheerFeedExpanded;
+  renderCheerFeed();
+}
+function renderCheerFeed() {
+  const box = document.getElementById('cheer-messages-list');
+  if (!box) return;
+  const moreBtn = document.getElementById('cheer-more-btn');
+  const all = store.data.cheers || [];
+  if (all.length === 0) {
+    box.innerHTML = `<div class="empty-state">💌 아직 주고받은 응원이 없어요.<br>첫 응원을 보내보세요!</div>`;
+    if (moreBtn) moreBtn.hidden = true;
+    return;
+  }
+  const limit = cheerFeedExpanded ? 20 : 5;
+  box.innerHTML = all.slice(-limit).reverse().map(c => {
+    const displayTime = c.createdAt ? formatCheerTimestamp(c.createdAt) : (c.time || '');
+    return `
+      <div class="cheer-msg-card">
+        <div class="cheer-msg-body">
+          <span class="cheer-msg-sender ${c.sender === 'boyfriend' ? 'bf' : 'gf'}">${escapeHtml(c.senderName)}</span>
+          <span>${escapeHtml(c.message)}</span>
+        </div>
+        <span class="cheer-msg-time">${escapeHtml(displayTime)}</span>
+      </div>`;
+  }).join('');
+  if (moreBtn) {
+    moreBtn.hidden = all.length <= 5;
+    moreBtn.innerText = cheerFeedExpanded ? '접기' : `더 보기 (${Math.min(all.length, 20)}개)`;
+  }
 }
 
 // --- 벌칙 리스트 렌더링 (수행할 벌칙 vs 완료 내역) ---
@@ -1477,13 +1591,13 @@ function renderPenaltiesList() {
   if (list.length === 0) {
     if (currentPenaltyFilter === 'pending') {
       container.innerHTML = `
-        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
           🎉 현재 수행 대기 중인 벌칙이 없어요!<br>미션 승부를 정산하거나 <b>'+ 벌칙 추가'</b>로 재미있는 벌칙을 걸어보세요.
         </div>
       `;
     } else {
       container.innerHTML = `
-        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+        <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
           ✨ 아직 수행 완료한 벌칙 내역이 없어요.
         </div>
       `;
@@ -1497,45 +1611,31 @@ function renderPenaltiesList() {
 
     const isBfLoser = p.loser === 'boyfriend';
     const loserBadge = isBfLoser
-      ? `<span class="penalty-user-badge bf">🏃‍♂️ 오동원 (수행자)</span>`
-      : `<span class="penalty-user-badge gf">🐰 김해솔 (수행자)</span>`;
-    
+      ? `<span class="penalty-user-badge bf">🏃‍♂️ 오동원</span>`
+      : `<span class="penalty-user-badge gf">🐰 김해솔</span>`;
     const targetBadge = isBfLoser
       ? `<span class="penalty-user-badge gf">🐰 김해솔에게</span>`
       : `<span class="penalty-user-badge bf">🏃‍♂️ 오동원에게</span>`;
 
     card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-        <div>
-          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
-            ${loserBadge}
-            <span style="font-size:0.75rem; color:var(--text-light);">➔</span>
-            ${targetBadge}
-          </div>
-          <div style="font-weight:800; font-size:0.95rem; color:var(--text-main); margin-top:4px;">
-            ${p.title}
-          </div>
-          <div style="font-size:0.72rem; color:var(--text-muted); margin-top:2px;">
-            ${p.fromMission ? `계기: ${p.fromMission} • ` : ''}등록: ${p.createdAt || '최근'}
-            ${p.completed ? ` • <b style="color:#2E7D32;">✅ ${p.completedAt || '수행 완료'}</b>` : ''}
-          </div>
+      <div class="penalty-head">
+        <div class="penalty-badges">
+          ${loserBadge}<span class="penalty-arrow">➔</span>${targetBadge}
         </div>
-        <div style="display:flex; gap:4px;">
-          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditPenaltyModal('${p.id}')" title="수정">✏️</button>
-          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deletePenalty('${p.id}')" title="삭제">🗑️</button>
-        </div>
+        ${moreMenuHtml([
+          { label: '✏️ 수정', action: `openEditPenaltyModal('${p.id}')` },
+          { label: '🗑️ 삭제', action: `deletePenalty('${p.id}')`, danger: true }
+        ])}
       </div>
-
-      <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:10px; gap:6px;">
-        ${!p.completed ? `
-          <button class="btn-primary" style="padding:5px 12px; font-size:0.78rem; background:linear-gradient(135deg, #4CAF50, #43A047);" onclick="togglePenaltyComplete('${p.id}', true)">
-            수행 완료! 🎉
-          </button>
-        ` : `
-          <button class="btn-primary" style="padding:4px 10px; font-size:0.72rem; background:#ECEFF1; color:#455A64; box-shadow:none;" onclick="togglePenaltyComplete('${p.id}', false)">
-            되돌리기 ↩️
-          </button>
-        `}
+      <div class="penalty-title">${escapeHtml(p.title)}</div>
+      <div class="penalty-meta">
+        ${p.fromMission ? `${escapeHtml(p.fromMission)} · ` : ''}${escapeHtml(p.createdAt || '최근')} 등록
+        ${p.completed ? ` · <span class="penalty-done">✅ ${escapeHtml(p.completedAt || '수행 완료')}</span>` : ''}
+      </div>
+      <div class="card-foot">
+        ${!p.completed
+          ? `<button class="btn-sm btn-success" onclick="togglePenaltyComplete('${p.id}', true)">수행 완료! 🎉</button>`
+          : `<button class="btn-sm btn-ghost" onclick="togglePenaltyComplete('${p.id}', false)">되돌리기 ↩️</button>`}
       </div>
     `;
     container.appendChild(card);
@@ -1551,11 +1651,11 @@ function openSettleMissionModal(missionId) {
   const infoEl = document.getElementById('settle-mission-info');
   if (infoEl) {
     infoEl.innerHTML = `
-      <div style="font-weight:800; font-size:0.92rem; color:var(--text-main); margin-bottom:4px;">${m.title}</div>
-      <div style="color:var(--text-muted); font-size:0.78rem;">
+      <div style="font-weight:800; font-size:var(--fs-md); color:var(--text-main); margin-bottom:4px;">${m.title}</div>
+      <div style="color:var(--text-muted); font-size:var(--fs-xs);">
         🏃‍♂️ 오동원: <b>${m.bfProgress}${m.unit}</b> vs 🐰 김해솔: <b>${m.gfProgress}${m.unit}</b> (목표: ${m.target}${m.unit})
       </div>
-      <div style="color:#E65100; font-size:0.78rem; font-weight:700; margin-top:4px;">
+      <div style="color:#E65100; font-size:var(--fs-xs); font-weight:700; margin-top:4px;">
         패자 벌칙: ${m.penalty}
       </div>
     `;
@@ -1976,7 +2076,7 @@ function renderWishlist() {
 
   if (targetList.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:0.85rem;">
+      <div style="text-align:center; padding:24px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
         ${currentWishlistSubTab === 'pending' ? '😋 아직 등록된 먹방 위시리스트가 없어요.<br>우측 상단 <b>+ 맛집/메뉴 추가</b>로 가고 싶은 맛집을 등록해보세요!' : '🎉 아직 정복 완료한 맛집이 없어요.<br>다이어트가 끝나면 가고 싶은 곳을 하나씩 정복해보세요! 🍽️'}
       </div>
     `;
@@ -1989,33 +2089,26 @@ function renderWishlist() {
     card.className = `wishlist-card ${item.isEaten ? 'completed' : ''}`;
 
     const isGf = item.authorRole === 'girlfriend';
-    const authorColor = isGf ? '#D81B60' : '#1976D2';
+    const author = item.authorName || (isGf ? '김해솔 🐰' : '오동원 🏃‍♂️');
 
     card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-          <span class="wishlist-tag">${item.category || '기타 😋'}</span>
-          <span style="font-size:0.72rem; font-weight:700; color:${authorColor};">${item.authorName || (isGf ? '김해솔 🐰' : '오동원 🏃‍♂️')} 픽</span>
+      <div class="wish-head">
+        <div class="wish-tags">
+          <span class="wishlist-tag">${escapeHtml(item.category || '기타 😋')}</span>
+          <span class="wish-author ${isGf ? 'gf' : 'bf'}">${escapeHtml(author)} 픽</span>
         </div>
-        <div style="display:flex; gap:4px;">
-          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="openEditWishlistModal('${item.id}')" title="수정">✏️</button>
-          <button class="icon-btn" style="width:26px; height:26px; font-size:0.75rem;" onclick="deleteWishlist('${item.id}')" title="삭제">🗑️</button>
-        </div>
+        ${moreMenuHtml([
+          { label: '✏️ 수정', action: `openEditWishlistModal('${item.id}')` },
+          { label: '🗑️ 삭제', action: `deleteWishlist('${item.id}')`, danger: true }
+        ])}
       </div>
-
-      <div style="font-size:0.95rem; font-weight:800; color:var(--text-main);">
-        ${item.title}
-      </div>
-
-      ${item.memo ? `<div style="font-size:0.75rem; color:var(--text-muted); background:#F8F9FA; padding:6px 10px; border-radius:8px;">📝 ${item.memo}</div>` : ''}
-
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
-        <span style="font-size:0.7rem; color:var(--text-light);">
-          ${item.isEaten ? `🎉 ${item.eatenDate || ''} 정복 완료` : '😋 다이어트 종료 대기 중'}
-        </span>
-        <button class="btn-primary" style="padding:6px 12px; font-size:0.75rem; ${item.isEaten ? 'background:#ECEFF1; color:#546E7A; box-shadow:none;' : 'background:linear-gradient(135deg, #FF7043, #F4511E);'}" onclick="toggleWishlistEaten('${item.id}')">
-          ${item.isEaten ? '↩️ 다시 가고 싶어요' : '🍽️ 정복 완료 체크!'}
-        </button>
+      <div class="wish-title">${escapeHtml(item.title)}</div>
+      ${item.memo ? `<div class="wish-memo">📝 ${escapeHtml(item.memo)}</div>` : ''}
+      <div class="wish-foot">
+        <span class="wish-status">${item.isEaten ? `🎉 ${escapeHtml(item.eatenDate || '')} 정복 완료` : '😋 다이어트 끝나면!'}</span>
+        ${item.isEaten
+          ? `<button class="btn-sm btn-ghost" onclick="toggleWishlistEaten('${item.id}')">↩️ 되돌리기</button>`
+          : `<button class="btn-sm btn-orange" onclick="toggleWishlistEaten('${item.id}')">🍽️ 정복 완료</button>`}
       </div>
     `;
     container.appendChild(card);
@@ -2053,7 +2146,7 @@ async function sendCheerMessage(msgText) {
 
   sfx.playSuccess();
   createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
-  renderMissionsScreen();
+  renderCheerFeed();
   await syncCheerToSupabase(newCheer);
 }
 
@@ -2083,20 +2176,20 @@ function renderCouponList() {
 
   const totalHearts = countTotalHearts();
   const heartCountEl = document.getElementById('total-heart-count');
-  if (heartCountEl) heartCountEl.innerText = `현재 모은 커플 하트: 💖 ${totalHearts}개`;
+  if (heartCountEl) heartCountEl.innerText = `모은 하트 💖 ${totalHearts}개`;
 
   const filteredCoupons = store.data.coupons.filter(cp => currentCouponSubTab === 'history' ? cp.used : !cp.used);
 
   if (filteredCoupons.length === 0) {
     if (currentCouponSubTab === 'available') {
       container.innerHTML = `
-        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
+        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
           🎁 보유 중인 데이트 쿠폰이 없어요.<br>우측 상단 <b>'+ 쿠폰 만들기'</b>로 새로운 목표를 세워보세요!
         </div>
       `;
     } else {
       container.innerHTML = `
-        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:0.85rem;">
+        <div style="text-align:center; padding:20px 10px; color:var(--text-muted); font-size:var(--fs-sm);">
           ✨ 아직 사용 완료한 쿠폰 내역이 없어요.<br>열심히 운동하고 모은 하트로 데이트 쿠폰을 사용해보세요! 🥰
         </div>
       `;
@@ -2110,29 +2203,24 @@ function renderCouponList() {
     card.className = `coupon-card ${cp.used ? 'used' : (!isReady ? 'locked' : '')}`;
 
     card.innerHTML = `
-      <div style="flex:1;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-size:0.92rem; font-weight:800; color:var(--text-main);">${cp.title}</div>
-          <div style="display:flex; gap:2px; margin-right:8px;">
-            <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="openEditCouponModal('${cp.id}')" title="수정">✏️</button>
-            <button class="icon-btn" style="width:24px; height:24px; font-size:0.7rem;" onclick="deleteCoupon('${cp.id}')" title="삭제">🗑️</button>
-          </div>
-        </div>
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
-          ${cp.used ? `
-            <span style="color:#2E7D32; font-weight:700;">🎉 ${cp.usedAt || '최근'} 사용 완료</span>
-          ` : `
-            필요 하트: 💖 ${cp.requiredHearts}개 (${isReady ? '잠금 해제 완료!' : `앞으로 ${cp.requiredHearts - totalHearts}개 남음`})
-          `}
-        </div>
+      <div class="coupon-head">
+        <div class="coupon-title">${escapeHtml(cp.title)}</div>
+        ${moreMenuHtml([
+          { label: '✏️ 수정', action: `openEditCouponModal('${cp.id}')` },
+          { label: '🗑️ 삭제', action: `deleteCoupon('${cp.id}')`, danger: true }
+        ])}
       </div>
-      <div>
+      <div class="coupon-foot">
+        <div class="coupon-meta">
+          ${cp.used
+            ? `<span class="ok">🎉 ${escapeHtml(cp.usedAt || '최근')} 사용 완료</span>`
+            : `💖 ${cp.requiredHearts}개 필요 · ${isReady ? '<span class="ok">사용 가능!</span>' : `${cp.requiredHearts - totalHearts}개 남음`}`}
+        </div>
         ${cp.used
-          ? `<button class="coupon-btn" style="background:#ECEFF1; color:#455A64; box-shadow:none; padding:5px 10px; font-size:0.72rem;" onclick="restoreCoupon('${cp.id}')">되돌리기 ↩️</button>`
+          ? `<button class="coupon-btn restore" onclick="restoreCoupon('${cp.id}')">되돌리기 ↩️</button>`
           : isReady
             ? `<button class="coupon-btn" onclick="useCoupon('${cp.id}')">사용하기 🎁</button>`
-            : `<button class="coupon-btn locked" style="background:#B0BEC5; cursor:not-allowed;">🔒 잠김</button>`
-        }
+            : `<button class="coupon-btn locked" disabled>🔒 잠김</button>`}
       </div>
     `;
     container.appendChild(card);
@@ -2300,15 +2388,16 @@ function updateTimerDisplay() {
 
   if (phaseEl) {
     phaseEl.className = 'timer-phase-lbl';
+    phaseEl.style.color = '';
+    phaseEl.style.background = '';
     if (currentPhase === 'ready') {
-      phaseEl.innerText = '준비 완료 (시작을 눌러주세요)';
-      phaseEl.style.color = '#8E8A98';
-      phaseEl.style.background = '#F5F5F5';
+      phaseEl.innerText = '준비 완료';
+      phaseEl.classList.add('ready');
     } else if (currentPhase === 'work') {
-      phaseEl.innerText = '🔥 열정 달리기 / 운동 중!';
+      phaseEl.innerText = '🔥 운동 중!';
       phaseEl.classList.add('work');
     } else if (currentPhase === 'rest') {
-      phaseEl.innerText = '🍃 숨고르기 / 가볍게 걷기';
+      phaseEl.innerText = '🍃 숨고르기';
       phaseEl.classList.add('rest');
     }
   }
@@ -2514,7 +2603,7 @@ function updateSettingsModalUI() {
   const roleName = role === 'boyfriend' ? '오동원 🏃‍♂️ (남친)' : '김해솔 🐰 (여친)';
   const pinHeader = document.getElementById('my-pin-setting-header');
   if (pinHeader) {
-    pinHeader.innerText = `🔒 [${roleName}] 4자리 비밀번호(PIN) 변경`;
+    pinHeader.innerText = `🔒 ${String(roleName).split(' ')[0]}님의 PIN 변경`;
   }
 }
 
@@ -2799,7 +2888,8 @@ async function loadFromSupabase(silent = false) {
 
     // 사용자가 입력 중이 아닐 때 부드럽게 화면 갱신
     const isTyping = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
-    if (!isTyping) {
+    const isMenuOpen = !!document.querySelector('.more-menu.open');
+    if (!isTyping && !isMenuOpen) {
       renderHomeScreen();
       if (currentTab === 'stats') renderStatsScreen();
       if (currentTab === 'diet') renderDietScreen();
@@ -2924,6 +3014,11 @@ document.addEventListener('visibilitychange', () => {
       setupSupabaseRealtime();
     }
   }
+});
+let stepChartResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(stepChartResizeTimer);
+  stepChartResizeTimer = setTimeout(() => { if (currentTab === 'stats') drawWeeklyStepChart(); }, 150);
 });
 window.addEventListener('focus', () => {
   if (supabaseClient) loadFromSupabase();
