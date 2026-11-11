@@ -10,12 +10,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="CoupleFit">
   <meta name="theme-color" content="#FFE1E9">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=5.4">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5.4">
-  <link rel="manifest" href="manifest.json?v=5.4">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=5.5">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5.5">
+  <link rel="manifest" href="manifest.json?v=5.5">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=5.4">
+  <link rel="stylesheet" href="style.css?v=5.5">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -138,7 +138,7 @@
     <!-- 상단 헤더 -->
     <header class="header">
       <div class="header-title-box">
-        <img src="icon-192.png?v=5.4" alt="" class="header-logo" />
+        <img src="icon-192.png?v=5.5" alt="" class="header-logo" />
         <h1 class="header-title">커플핏</h1>
       </div>
       <div class="header-actions">
@@ -253,6 +253,22 @@
 
       <!-- ================= TAB 2: 통계 (걸음수 & 체중) ================= -->
       <section id="tab-stats" class="tab-page">
+        <!-- 0. 주간 리포트 -->
+        <div class="card">
+          <div class="card-title-row">
+            <div>
+              <div class="card-title"><span>📋</span> 주간 리포트</div>
+              <span class="card-subtitle">월요일부터 일요일까지 둘의 기록 요약</span>
+            </div>
+          </div>
+          <div class="date-stepper">
+            <button class="date-step-btn" onclick="shiftReportWeek(-1)" aria-label="이전 주">‹</button>
+            <div id="report-week-label" class="date-trigger-pill neutral static">이번 주</div>
+            <button id="report-week-next" class="date-step-btn" onclick="shiftReportWeek(1)" aria-label="다음 주">›</button>
+          </div>
+          <div id="weekly-report-body"></div>
+        </div>
+
         <!-- 1. 걸음 수 기록 & 주간 그래프 -->
         <div class="card">
           <div class="card-title-row">
@@ -309,13 +325,24 @@
             </div>
 
             <!-- 2. 잠금 해제 상태 화면 -->
-            <div id="my-weight-unlocked-view" style="display:none; justify-content:space-between; align-items:center; width:100%;">
-              <div>
-                <div style="font-size:var(--fs-xs); color:var(--text-muted); font-weight:700;">내 현재 체중 (잠금 해제됨)</div>
-                <div id="my-weight-display" style="font-size:var(--fs-xl); font-weight:800; color:#D81B60; margin-top:2px;">- kg</div>
-                <div id="my-delta-display" style="font-size:var(--fs-xs); color:var(--text-muted); margin-top:2px;">시작 대비 - kg</div>
+            <div id="my-weight-unlocked-view" class="weight-unlocked" style="display:none;">
+              <div class="weight-unlocked-head">
+                <div>
+                  <div class="weight-lbl">내 현재 체중</div>
+                  <div id="my-weight-display" class="weight-now">- kg</div>
+                  <div id="my-delta-display" class="weight-delta">시작 대비 - kg</div>
+                </div>
+                <button class="btn-sm btn-ghost" onclick="lockWeightDisplay()">🔒 잠그기</button>
               </div>
-              <button class="btn-primary" style="padding:5px 10px; font-size:var(--fs-xs); background:#ECEFF1; color:#546E7A; box-shadow:none;" onclick="lockWeightDisplay()">🔒 다시 잠그기</button>
+              <canvas id="my-weight-chart" class="weight-chart" aria-label="내 체중 변화 그래프"></canvas>
+              <div id="my-weight-chart-empty" class="hint-center" hidden>기록이 2개 이상 쌓이면 그래프가 그려져요.</div>
+              <div class="goal-row">
+                <label for="goal-weight-input">🎯 목표</label>
+                <input type="number" step="0.1" inputmode="decimal" id="goal-weight-input" class="input-field" placeholder="예: 75.0" />
+                <span>kg</span>
+                <button class="btn-sm btn-ghost" onclick="saveGoalWeight()">저장</button>
+              </div>
+              <div id="goal-progress" class="goal-progress"></div>
             </div>
           </div>
 
@@ -1016,6 +1043,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=5.4"></script>
+  <script src="app.js?v=5.5"></script>
 </body>
 </html>

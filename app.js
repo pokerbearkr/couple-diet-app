@@ -879,6 +879,260 @@ function updateDietInputUI() {
 // --- 8. Stats Screen Rendering (비밀번호 보안 잠금) ---
 let isWeightUnlocked = false;
 
+// --- 내 체중 그래프 & 목표 체중 (잠금 해제 상태에서만 표시, 목표는 이 기기에만 저장) ---
+function getGoalWeight(role) {
+  try {
+    const v = parseFloat(localStorage.getItem('couple_goal_weight_' + role));
+    return isNaN(v) ? null : v;
+  } catch (e) { return null; }
+}
+
+function saveGoalWeight() {
+  const role = store.data.currentRole;
+  const input = document.getElementById('goal-weight-input');
+  if (!input) return;
+  const raw = input.value.trim();
+  try {
+    if (raw === '') {
+      localStorage.removeItem('couple_goal_weight_' + role);
+    } else {
+      const v = parseFloat(raw);
+      if (isNaN(v) || v <= 20 || v >= 250) return alert('올바른 목표 체중(kg)을 입력해주세요!');
+      localStorage.setItem('couple_goal_weight_' + role, String(v));
+    }
+  } catch (e) {}
+  input.blur();
+  sfx.playSuccess();
+  renderStatsScreen();
+}
+
+function renderMyWeightTrend(role, logs) {
+  const goal = getGoalWeight(role);
+  const goalInput = document.getElementById('goal-weight-input');
+  if (goalInput && document.activeElement !== goalInput) goalInput.value = goal != null ? goal : '';
+
+  const progressEl = document.getElementById('goal-progress');
+  const latest = logs[logs.length - 1];
+  if (progressEl) {
+    if (goal == null) {
+      progressEl.innerText = '목표 체중을 정하면 남은 kg을 알려드려요.';
+    } else if (!latest) {
+      progressEl.innerText = `목표 ${goal}kg · 체중을 기록하면 남은 kg이 보여요.`;
+    } else {
+      const remain = (latest.weight - goal);
+      const start = latest.baseline || logs[0].weight;
+      const total = start - goal;
+      const pct = total > 0 ? Math.max(0, Math.min(100, Math.round(((start - latest.weight) / total) * 100))) : null;
+      progressEl.innerHTML = remain <= 0
+        ? `🎉 <b>목표 ${goal}kg 달성!</b> 정말 대단해요.`
+        : `목표 ${goal}kg까지 <b>${remain.toFixed(1)}kg</b> 남았어요${pct != null ? ` · ${pct}% 진행` : ''}`;
+    }
+  }
+
+  const canvas = document.getElementById('my-weight-chart');
+  const emptyEl = document.getElementById('my-weight-chart-empty');
+  if (!canvas) return;
+  const points = logs.slice(-60);
+  if (points.length < 2) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  canvas.style.display = 'block';
+  if (emptyEl) emptyEl.hidden = true;
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 300;
+  const cssH = canvas.clientHeight || 150;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const toDay = (str) => { const [y, m, d] = str.split('-').map(Number); return Math.round(new Date(y, m - 1, d).getTime() / 86400000); };
+  const xs = points.map(p => toDay(p.date));
+  const ws = points.map(p => p.weight);
+  let minW = Math.min(...ws), maxW = Math.max(...ws);
+  const showGoal = goal != null && goal > minW - 8 && goal < maxW + 8;
+  if (showGoal) { minW = Math.min(minW, goal); maxW = Math.max(maxW, goal); }
+  const padW = Math.max(0.5, (maxW - minW) * 0.15);
+  minW -= padW; maxW += padW;
+
+  const left = 38, right = 12, top = 12, bottom = 22;
+  const plotW = cssW - left - right, plotH = cssH - top - bottom;
+  const xSpan = Math.max(1, xs[xs.length - 1] - xs[0]);
+  const px = (x) => left + ((x - xs[0]) / xSpan) * plotW;
+  const py = (w) => top + (1 - (w - minW) / (maxW - minW)) * plotH;
+  const font = (wgt) => `${wgt} 12px -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+
+  // 가로 눈금 (최소/중간/최대)
+  ctx.font = font(600); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  [minW + padW, (minW + maxW) / 2, maxW - padW].forEach(v => {
+    const y = Math.round(py(v)) + 0.5;
+    ctx.strokeStyle = '#F6DCE2'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(cssW - right, y); ctx.stroke();
+    ctx.fillStyle = '#8A5A68';
+    ctx.fillText(v.toFixed(1), left - 6, y);
+  });
+
+  // 목표선 (점선)
+  if (showGoal) {
+    const gy = Math.round(py(goal)) + 0.5;
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#2E7D32'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(left, gy); ctx.lineTo(cssW - right, gy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#2E7D32'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.font = font(800);
+    ctx.fillText(`목표 ${goal}`, cssW - right, gy - 3);
+  }
+
+  // 추이선 + 점
+  ctx.strokeStyle = '#D6336C'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  points.forEach((p, i) => { const x = px(xs[i]), y = py(p.weight); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+  ctx.stroke();
+  points.forEach((p, i) => {
+    const isLast = i === points.length - 1;
+    ctx.beginPath(); ctx.arc(px(xs[i]), py(p.weight), isLast ? 4.5 : 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = isLast ? '#D6336C' : '#FFFFFF'; ctx.fill();
+    ctx.strokeStyle = '#D6336C'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  // 날짜 라벨 (처음 / 마지막)
+  const lbl = (str) => { const [, m, d] = str.split('-'); return `${parseInt(m, 10)}/${parseInt(d, 10)}`; };
+  ctx.fillStyle = '#8A5A68'; ctx.font = font(600); ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left'; ctx.fillText(lbl(points[0].date), left, cssH - 5);
+  ctx.textAlign = 'right'; ctx.fillText(lbl(points[points.length - 1].date), cssW - right, cssH - 5);
+}
+
+// --- 주간 리포트 (월~일) ---
+let reportWeekOffset = 0; // 0 = 이번 주, -1 = 지난주 ...
+const weekDietCountCache = {}; // { 'YYYY-MM-DD': { t, boyfriend, girlfriend } }
+
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function shiftReportWeek(delta) {
+  const next = reportWeekOffset + delta;
+  if (next > 0) return;
+  reportWeekOffset = next;
+  sfx.playSuccess();
+  renderWeeklyReport();
+}
+
+function getReportWeekDays() {
+  const start = getWeekStartDate();
+  start.setDate(start.getDate() + reportWeekOffset * 7);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    days.push(dateToStr(d));
+  }
+  return days;
+}
+
+// 그 주의 식단 기록 수 (사진 없이 가볍게 조회, 1분 캐시)
+async function refreshWeekDietCounts(startStr, endStr) {
+  if (!supabaseClient) return;
+  const cached = weekDietCountCache[startStr];
+  if (cached && Date.now() - cached.t < 60000) return;
+  weekDietCountCache[startStr] = { ...(cached || {}), t: Date.now() };
+  try {
+    const { data, error } = await supabaseClient.from('diet_logs')
+      .select('id,user_role,date').gte('date', startStr).lte('date', endStr);
+    if (error || !Array.isArray(data)) return;
+    weekDietCountCache[startStr] = {
+      t: Date.now(),
+      boyfriend: data.filter(d => d.user_role === 'boyfriend').length,
+      girlfriend: data.filter(d => d.user_role === 'girlfriend').length
+    };
+    if (currentTab === 'stats' && getReportWeekDays()[0] === startStr) renderWeeklyReport();
+  } catch (e) {
+    console.warn('weekly diet count warning:', e);
+  }
+}
+
+function renderWeeklyReport() {
+  const body = document.getElementById('weekly-report-body');
+  if (!body) return;
+  const days = getReportWeekDays();
+  const startStr = days[0], endStr = days[6];
+  const today = getTodayStr();
+
+  const labelEl = document.getElementById('report-week-label');
+  if (labelEl) {
+    const name = reportWeekOffset === 0 ? '이번 주' : reportWeekOffset === -1 ? '지난주' : `${-reportWeekOffset}주 전`;
+    const md = (str) => { const [, m, d] = str.split('-'); return `${parseInt(m, 10)}/${parseInt(d, 10)}`; };
+    labelEl.innerText = `${name} (${md(startStr)}~${md(endStr)})`;
+  }
+  const nextBtn = document.getElementById('report-week-next');
+  if (nextBtn) nextBtn.disabled = reportWeekOffset >= 0;
+
+  const roles = ['boyfriend', 'girlfriend'];
+  const stat = {};
+  roles.forEach(r => {
+    const workout = days.filter(d => store.data.attendance[d] && store.data.attendance[d][r]).length;
+    const stepVals = days.map(d => (store.data.stepLogs[d] || {})[r] || 0).filter(v => v > 0);
+    const stepAvg = stepVals.length ? Math.round(stepVals.reduce((a, b) => a + b, 0) / stepVals.length) : 0;
+
+    const logs = store.data.weightLogs[r] || [];
+    const inWeek = logs.filter(l => l.date >= startStr && l.date <= endStr);
+    const before = logs.filter(l => l.date < startStr);
+    let weightDelta = null;
+    if (inWeek.length) {
+      const ref = before.length ? before[before.length - 1] : inWeek[0];
+      weightDelta = inWeek[inWeek.length - 1].weight - ref.weight;
+    }
+
+    const cached = weekDietCountCache[startStr];
+    const diet = cached && typeof cached[r] === 'number'
+      ? cached[r]
+      : store.data.dietLogs.filter(d => d.role === r && d.date >= startStr && d.date <= endStr).length;
+
+    stat[r] = { workout, stepAvg, weightDelta, diet };
+  });
+  const together = days.filter(d => store.data.attendance[d] && store.data.attendance[d].boyfriend && store.data.attendance[d].girlfriend).length;
+  const elapsed = days.filter(d => d <= today).length;
+
+  let comment;
+  const bf = stat.boyfriend, gf = stat.girlfriend;
+  if (bf.workout === 0 && gf.workout === 0) comment = reportWeekOffset === 0 ? '아직 기록이 없어요. 오늘 첫 도장을 찍어볼까요? 👟' : '이 주에는 운동 기록이 없어요.';
+  else if (together >= 5) comment = '환상의 팀워크! 거의 매일 함께 운동했어요 💖';
+  else if (bf.workout === gf.workout) comment = `둘 다 ${bf.workout}일씩 운동했어요. 막상막하! 🤝`;
+  else {
+    const lead = bf.workout > gf.workout ? '오동원' : '김해솔';
+    comment = `${lead}님이 운동 ${Math.abs(bf.workout - gf.workout)}일 앞서고 있어요 🔥`;
+  }
+
+  const fmt = n => Number(n || 0).toLocaleString('ko-KR');
+  const wtxt = v => v == null ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(1)}kg`;
+  const win = (a, b) => (a > b ? ' win' : '');
+  const row = (label, a, b, aw, bw) => `
+    <div class="report-row">
+      <span class="report-metric">${label}</span>
+      <span class="report-val bf${aw}">${a}</span>
+      <span class="report-val gf${bw}">${b}</span>
+    </div>`;
+
+  body.innerHTML = `
+    <div class="report-hero">
+      <div class="report-hero-num">💖 함께 운동한 날 <b>${together}일</b><span> / ${elapsed}일</span></div>
+      <div class="report-hero-msg">${comment}</div>
+    </div>
+    <div class="report-table">
+      <div class="report-row head">
+        <span></span><span class="report-val bf">🏃‍♂️ 오동원</span><span class="report-val gf">🐰 김해솔</span>
+      </div>
+      ${row('운동한 날', `${bf.workout}일`, `${gf.workout}일`, win(bf.workout, gf.workout), win(gf.workout, bf.workout))}
+      ${row('평균 걸음', bf.stepAvg ? `${fmt(bf.stepAvg)}보` : '-', gf.stepAvg ? `${fmt(gf.stepAvg)}보` : '-', win(bf.stepAvg, gf.stepAvg), win(gf.stepAvg, bf.stepAvg))}
+      ${row('식단 기록', `${bf.diet}끼`, `${gf.diet}끼`, win(bf.diet, gf.diet), win(gf.diet, bf.diet))}
+      ${row('체중 변화', wtxt(bf.weightDelta), wtxt(gf.weightDelta), '', '')}
+    </div>`;
+
+  refreshWeekDietCounts(startStr, endStr);
+}
+
 function renderStatsScreen() {
   const role = store.data.currentRole;
   const partnerRole = role === 'boyfriend' ? 'girlfriend' : 'boyfriend';
@@ -886,6 +1140,7 @@ function renderStatsScreen() {
   updateStepUI();
   updateWeightUI();
   drawWeeklyStepChart();
+  renderWeeklyReport();
 
   // 체중 기록 섹션 (프라이버시 & PIN 잠금)
   const myLogs = store.data.weightLogs[role] || [];
@@ -908,7 +1163,7 @@ function renderStatsScreen() {
   // 본인 체중: 잠금 상태 제어
   if (isWeightUnlocked) {
     if (lockedView) lockedView.style.display = 'none';
-    if (unlockedView) unlockedView.style.display = 'flex';
+    if (unlockedView) unlockedView.style.display = 'block';
 
     if (myLatest) {
       if (myWeightDisplay) myWeightDisplay.innerText = `${myLatest.weight} kg`;
@@ -919,6 +1174,7 @@ function renderStatsScreen() {
       if (myWeightDisplay) myWeightDisplay.innerText = `- kg`;
       if (myDeltaDisplay) myDeltaDisplay.innerText = `체중을 기록해보세요`;
     }
+    renderMyWeightTrend(role, myLogs);
   } else {
     if (lockedView) lockedView.style.display = 'flex';
     if (unlockedView) unlockedView.style.display = 'none';
@@ -1148,10 +1404,21 @@ function renderDietScreen() {
           ])}
         </div>
         <p class="diet-memo">${escapeHtml(item.memo || '맛있게 건강하게 식사 완료! 😋')}</p>
+        ${dietReactionsHtml(item)}
       </div>
     `;
     container.appendChild(card);
   });
+
+  // 전체 보기일 때만 '이전 기록 더 보기' 버튼 표시
+  if (!selectedDietFilterDate && supabaseClient && !dietNoMoreOlder) {
+    const more = document.createElement('button');
+    more.className = 'text-btn diet-more-btn';
+    more.disabled = dietOlderLoading;
+    more.innerText = dietOlderLoading ? '불러오는 중...' : '이전 기록 더 보기';
+    more.onclick = loadMoreDietLogs;
+    container.appendChild(more);
+  }
 }
 
 // --- 사진 확대 라이트박스 & 다운로드 ---
@@ -1284,6 +1551,8 @@ async function saveEditedDietLog() {
   item.memo = memo || `${editSelectedMealType} 식사 기록`;
   item.mealType = editSelectedMealType;
   if (currentDietEditPhoto) item.photoUrl = currentDietEditPhoto;
+  const cachedOlder = olderDietCache.find(d => d.id === editId);
+  if (cachedOlder) Object.assign(cachedOlder, { memo: item.memo, mealType: item.mealType, photoUrl: item.photoUrl });
 
   store.save();
   sfx.playSuccess();
@@ -1296,10 +1565,13 @@ async function saveEditedDietLog() {
 async function deleteDietLog(dietId) {
   if (confirm('이 식단 일기를 삭제하시겠습니까?')) {
     store.data.dietLogs = store.data.dietLogs.filter(d => d.id !== dietId);
+    olderDietCache = olderDietCache.filter(d => d.id !== dietId);
+    store.data.cheers = (store.data.cheers || []).filter(c => { const r = parseDietReaction(c); return !(r && r.dietId === dietId); });
     store.save();
     sfx.playSuccess();
     renderDietScreen();
     await deleteDietFromSupabase(dietId);
+    await deleteDietReactionsFromSupabase(dietId);
   }
 }
 
@@ -1546,6 +1818,112 @@ function renderMissionsScreen() {
   renderCouponList();
 }
 
+// --- 식단 반응 (하트 / 한 줄 댓글) ---
+// 별도 테이블 없이 cheers 테이블에 '::diet:<식단ID>::<내용>' 형식으로 저장하고, 응원 피드에서는 숨김
+const DIET_REACTION_RE = /^::diet:([^:]+)::([\s\S]*)$/;
+const DIET_HEART = '❤️';
+let openDietCommentId = null;
+
+function parseDietReaction(c) {
+  const m = DIET_REACTION_RE.exec((c && c.message) || '');
+  return m ? { dietId: m[1], text: m[2] } : null;
+}
+function isDietReaction(c) {
+  return DIET_REACTION_RE.test((c && c.message) || '');
+}
+function getDietReactions(dietId) {
+  const hearts = [], comments = [];
+  (store.data.cheers || []).forEach(c => {
+    const r = parseDietReaction(c);
+    if (!r || r.dietId !== dietId) return;
+    if (r.text === DIET_HEART) hearts.push(c);
+    else comments.push({ ...c, text: r.text });
+  });
+  return { hearts, comments };
+}
+
+async function addDietReaction(dietId, text) {
+  const role = store.data.currentRole;
+  const now = new Date();
+  const newCheer = {
+    id: generateUUID(),
+    sender: role,
+    senderName: role === 'boyfriend' ? store.data.couple.bfName : store.data.couple.gfName,
+    message: `::diet:${dietId}::${text}`,
+    createdAt: now.toISOString(),
+    time: formatCheerTimestamp(now)
+  };
+  store.data.cheers.push(newCheer);
+  store.save();
+  sfx.playSuccess();
+  renderDietScreen();
+  await syncCheerToSupabase(newCheer);
+}
+
+async function removeCheerById(cheerId) {
+  store.data.cheers = store.data.cheers.filter(c => c.id !== cheerId);
+  store.save();
+  renderDietScreen();
+  await deleteCheerFromSupabase(cheerId);
+}
+
+function toggleDietHeart(dietId, e) {
+  const role = store.data.currentRole;
+  const mine = getDietReactions(dietId).hearts.find(c => c.sender === role);
+  if (mine) {
+    removeCheerById(mine.id);
+  } else {
+    if (e && e.clientX) createFloatingHearts(e.clientX, e.clientY, 6);
+    addDietReaction(dietId, DIET_HEART);
+  }
+}
+
+function toggleDietCommentBox(dietId) {
+  openDietCommentId = openDietCommentId === dietId ? null : dietId;
+  renderDietScreen();
+  if (openDietCommentId) {
+    const input = document.getElementById('diet-comment-input');
+    if (input) input.focus();
+  }
+}
+
+function submitDietComment(dietId) {
+  const input = document.getElementById('diet-comment-input');
+  if (!input) return;
+  const text = input.value.trim().slice(0, 120);
+  if (!text) return;
+  input.value = '';
+  input.blur();
+  addDietReaction(dietId, text);
+}
+
+function deleteDietComment(cheerId) {
+  if (confirm('이 댓글을 삭제할까요?')) removeCheerById(cheerId);
+}
+
+function dietReactionsHtml(item) {
+  const role = store.data.currentRole;
+  const { hearts, comments } = getDietReactions(item.id);
+  const iHearted = hearts.some(c => c.sender === role);
+  const isOpen = openDietCommentId === item.id;
+  const commentsHtml = comments.map(c => `
+    <div class="diet-comment">
+      <span class="diet-comment-text"><b class="${c.sender === 'boyfriend' ? 'bf' : 'gf'}">${escapeHtml(String(c.senderName || '').split(' ')[0])}</b> ${escapeHtml(c.text)}</span>
+      ${c.sender === role ? `<button class="comment-del" aria-label="댓글 삭제" onclick="deleteDietComment('${c.id}')">×</button>` : ''}
+    </div>`).join('');
+  return `
+    <div class="diet-react-row">
+      <button class="react-btn${iHearted ? ' on' : ''}" aria-label="하트" onclick="toggleDietHeart('${item.id}', event)">${iHearted ? '❤️' : '🤍'}${hearts.length ? ` ${hearts.length}` : ''}</button>
+      <button class="react-btn${isOpen ? ' on' : ''}" onclick="toggleDietCommentBox('${item.id}')">💬 ${comments.length ? comments.length : '댓글'}</button>
+    </div>
+    ${commentsHtml ? `<div class="diet-comments">${commentsHtml}</div>` : ''}
+    ${isOpen ? `
+      <div class="inline-send-bar compact">
+        <input type="text" id="diet-comment-input" maxlength="120" placeholder="한 줄 댓글 달기" onkeydown="if(event.key==='Enter'){submitDietComment('${item.id}');}" />
+        <button class="btn-primary" onclick="submitDietComment('${item.id}')">등록</button>
+      </div>` : ''}`;
+}
+
 // --- 응원 피드 (홈 탭: 최근 5개, '더 보기'로 20개) ---
 let cheerFeedExpanded = false;
 function toggleCheerFeedExpanded() {
@@ -1556,7 +1934,7 @@ function renderCheerFeed() {
   const box = document.getElementById('cheer-messages-list');
   if (!box) return;
   const moreBtn = document.getElementById('cheer-more-btn');
-  const all = store.data.cheers || [];
+  const all = (store.data.cheers || []).filter(c => !isDietReaction(c));
   if (all.length === 0) {
     box.innerHTML = `<div class="empty-state">💌 아직 주고받은 응원이 없어요.<br>첫 응원을 보내보세요!</div>`;
     if (moreBtn) moreBtn.hidden = true;
@@ -2660,6 +3038,42 @@ function updateCloudSyncStatusBadge(isConnected) {
 
 // --- 식단 기록 헬퍼 (최신 30개 + 필터 날짜 추가 조회) ---
 let dietFilterLoadingDate = '';
+const DIET_PAGE_SIZE = 30;      // 자동 동기화로 받는 최신 기록 수
+const DIET_OLDER_PAGE_SIZE = 20; // '더 보기' 한 번에 받는 수
+let olderDietCache = [];         // '더 보기'로 불러온 이전 기록 (이 세션 동안만 유지)
+let dietNoMoreOlder = false;
+let dietOlderLoading = false;
+
+// 식단 피드 '이전 기록 더 보기'
+async function loadMoreDietLogs() {
+  if (!supabaseClient || dietOlderLoading || dietNoMoreOlder) return;
+  const paged = store.data.dietLogs.filter(d => d.createdAt && (!d._older || d._paged));
+  if (!paged.length) return;
+  const oldest = paged.reduce((a, b) => (String(a.createdAt) < String(b.createdAt) ? a : b)).createdAt;
+
+  dietOlderLoading = true;
+  renderDietScreen();
+  try {
+    const { data, error } = await supabaseClient
+      .from('diet_logs')
+      .select('*')
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(DIET_OLDER_PAGE_SIZE);
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data.map(mapDietRow) : [];
+    if (rows.length < DIET_OLDER_PAGE_SIZE) dietNoMoreOlder = true;
+    const known = new Set(olderDietCache.map(d => d.id));
+    rows.forEach(r => { if (!known.has(r.id)) olderDietCache.push({ ...r, _paged: true }); });
+    const base = store.data.dietLogs.filter(d => !d._paged);
+    store.data.dietLogs = mergeDietLogs(base, olderDietCache);
+  } catch (e) {
+    console.warn('diet_logs older fetch error:', e);
+    alert('이전 기록을 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
+  }
+  dietOlderLoading = false;
+  renderDietScreen();
+}
 
 function mapDietRow(d) {
   return {
@@ -2763,10 +3177,13 @@ async function loadFromSupabase(silent = false) {
       .from('diet_logs')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(30);
+      .limit(DIET_PAGE_SIZE);
     if (!dietErr && Array.isArray(dietList)) {
       let dietLogs = dietList.map(mapDietRow).reverse();
       // 날짜 필터 사용 중이면 최신 30개에 없는 그 날짜의 과거 기록도 함께 유지
+      if (dietList.length < DIET_PAGE_SIZE) dietNoMoreOlder = true;
+      // '더 보기'로 불러온 이전 기록은 다시 받지 않고 메모리에 둔 것을 합침
+      if (olderDietCache.length) dietLogs = mergeDietLogs(dietLogs, olderDietCache);
       if (selectedDietFilterDate) {
         const dayLogs = await fetchDietRowsForDate(selectedDietFilterDate);
         if (dayLogs) dietLogs = mergeDietLogs(dietLogs, dayLogs);
@@ -2969,10 +3386,16 @@ function setupSupabaseRealtime() {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'cheers' }, (payload) => {
       loadFromSupabase();
-      createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+      if (payload.eventType !== 'INSERT' || !payload.new || !payload.new.sender_role) return;
       const currentRole = store.data.currentRole;
-      if (payload.new && payload.new.sender_role !== currentRole) {
-        showSystemNotification(`💌 ${payload.new.sender_name}의 응원 도착!`, payload.new.message);
+      const reaction = parseDietReaction(payload.new);
+      if (!reaction) createFloatingHearts(window.innerWidth / 2, window.innerHeight / 2, 20);
+      if (payload.new.sender_role !== currentRole) {
+        if (reaction) {
+          showSystemNotification(`🥗 ${payload.new.sender_name}님이 식단에 반응했어요`, reaction.text);
+        } else {
+          showSystemNotification(`💌 ${payload.new.sender_name}의 응원 도착!`, payload.new.message);
+        }
       }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'missions' }, () => {
@@ -3127,13 +3550,38 @@ async function deleteDietFromSupabase(dietId) {
 async function syncCheerToSupabase(newCheer) {
   if (!supabaseClient) return;
   try {
-    await supabaseClient.from('cheers').insert({
+    const row = {
       sender_role: newCheer.sender,
       sender_name: newCheer.senderName,
       message: newCheer.message
-    });
+    };
+    // 로컬에서 만든 ID를 그대로 써야 나중에 하트 취소/댓글 삭제가 가능
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newCheer.id || '')) row.id = newCheer.id;
+    const { error } = await supabaseClient.from('cheers').insert(row);
+    if (error) throw error;
   } catch (e) {
     console.error('Supabase cheer sync error:', e);
+  }
+}
+
+async function deleteCheerFromSupabase(cheerId) {
+  if (!supabaseClient || !cheerId) return;
+  try {
+    const { error } = await supabaseClient.from('cheers').delete().eq('id', cheerId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Supabase cheer delete error:', e);
+  }
+}
+
+// 식단을 지우면 그 식단에 달린 하트/댓글도 함께 정리
+async function deleteDietReactionsFromSupabase(dietId) {
+  if (!supabaseClient || !dietId) return;
+  try {
+    const { error } = await supabaseClient.from('cheers').delete().like('message', `::diet:${dietId}::%`);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Supabase diet reaction delete error:', e);
   }
 }
 

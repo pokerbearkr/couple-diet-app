@@ -1763,3 +1763,64 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .preset-card span { font-size: var(--fs-xs); font-weight: 600; line-height: 1.4; }
 .preset-card.pink { background: #FFF0F3; color: #C2185B; border: 1px solid #FFD1DC; }
 .preset-card.blue { background: #F0F7FF; color: #1565C0; border: 1px solid #D0E3FF; }
+
+/* ========================================================
+   v5.5: 주간 리포트 · 내 체중 그래프 · 식단 반응 · 더 보기
+   ======================================================== */
+.date-trigger-pill.static { cursor: default !important; }
+
+/* 주간 리포트 */
+.report-hero { background: linear-gradient(135deg, #FFF0F3, #FFE7EC); border-radius: 14px; padding: 14px; text-align: center; }
+.report-hero-num { font-size: var(--fs-md); font-weight: 700; color: #8A2E4E; }
+.report-hero-num b { font-size: var(--fs-xl); font-weight: 800; color: #A3174A; margin-left: 4px; }
+.report-hero-num span { font-size: var(--fs-sm); color: #8A5A68; }
+.report-hero-msg { font-size: var(--fs-sm); color: #8A2E4E; margin-top: 4px; }
+.report-table { margin-top: 10px; }
+.report-row { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--card-border); }
+.report-row:last-child { border-bottom: none; }
+.report-row.head { padding: 6px 4px; }
+.report-row.head .report-val { font-size: var(--fs-xs); font-weight: 800; }
+.report-metric { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 700; }
+.report-val { font-size: var(--fs-md); font-weight: 700; text-align: center; color: var(--text-main); white-space: nowrap; }
+.report-row.head .report-val.bf, .report-val.bf.win { color: #1976D2; }
+.report-row.head .report-val.gf, .report-val.gf.win { color: #C2185B; }
+.report-val.win { font-weight: 800; }
+.report-val.win::after { content: ' 👑'; font-size: var(--fs-xs); }
+
+/* 내 체중 그래프 & 목표 */
+.weight-unlocked { width: 100%; }
+.weight-unlocked-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.weight-lbl { font-size: var(--fs-xs); color: #8A5A68; font-weight: 700; }
+.weight-now { font-size: 1.6rem; font-weight: 800; color: #A3174A; margin-top: 2px; line-height: 1.2; }
+.weight-delta { font-size: var(--fs-xs); color: #8A5A68; margin-top: 2px; }
+.weight-chart { width: 100%; height: 150px; display: block; margin-top: 12px; background: rgba(255,255,255,0.6); border-radius: 12px; }
+.goal-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: var(--fs-sm); font-weight: 700; color: #8A2E4E; }
+.goal-row label { white-space: nowrap; }
+.goal-row .input-field { flex: 1; min-width: 0; padding: 8px 10px; font-size: var(--fs-md); text-align: center; background: #FFF; }
+.goal-progress { font-size: var(--fs-sm); color: #8A2E4E; margin-top: 8px; }
+.goal-progress b { color: #A3174A; }
+
+/* 식단 반응 */
+.diet-react-row { display: flex; gap: 6px; margin-top: 8px; }
+.react-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  border: 1px solid #EAE0D8;
+  background: #FFF;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.react-btn.on { background: #FFF0F3; border-color: #FFB3C1; color: var(--accent-text); }
+.diet-comments { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.diet-comment { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; background: #FAF8F6; border-radius: 10px; padding: 6px 10px; }
+.diet-comment-text { font-size: var(--fs-sm); color: var(--text-main); line-height: 1.45; word-break: break-word; }
+.diet-comment-text b.bf { color: #1976D2; }
+.diet-comment-text b.gf { color: #C2185B; }
+.comment-del { border: none; background: none; color: var(--text-light); font-size: 1.1rem; line-height: 1; padding: 2px 4px; cursor: pointer; flex-shrink: 0; }
+.inline-send-bar.compact { margin-top: 8px; padding: 3px 3px 3px 12px; }
+.inline-send-bar.compact button { padding: 8px 12px; font-size: var(--fs-sm); }
+.diet-more-btn { margin-top: 6px; padding: 12px 0 4px; }
+.diet-more-btn:disabled { color: var(--text-light); }
