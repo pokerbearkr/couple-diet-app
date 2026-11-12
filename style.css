@@ -1824,3 +1824,132 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .inline-send-bar.compact button { padding: 8px 12px; font-size: var(--fs-sm); }
 .diet-more-btn { margin-top: 6px; padding: 12px 0 4px; }
 .diet-more-btn:disabled { color: var(--text-light); }
+
+/* ========================================================
+   v5.6: 토스트 · 동기화 상태 · 프로필 전환 · 설정 · 미션 입력 · 루틴 저장
+   ======================================================== */
+
+/* 토스트 */
+#toast-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(96px + var(--safe-bottom));
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  max-width: 420px;
+  background: rgba(45, 42, 52, 0.95);
+  color: #FFF;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 10px 16px;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  white-space: pre-line;
+  text-align: center;
+  animation: toastIn 0.22s ease-out;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.toast.success { background: rgba(27, 94, 32, 0.96); }
+.toast.warn { background: rgba(153, 77, 0, 0.96); }
+.toast.error { background: rgba(183, 28, 28, 0.96); }
+.toast.hide { opacity: 0; transform: translateY(8px); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* 동기화 상태 */
+.sync-status {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  background: #EEF3FB;
+  color: #1E4F8F;
+}
+.sync-status[hidden] { display: none; }
+.sync-status.pending { background: #FFF3E0; color: #8A4B00; }
+.sync-status.offline { background: #F1EFF4; color: #5A5564; }
+
+/* 프로필 전환 */
+body.owner-set .user-switch-bar { display: none; }
+.viewing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 16px 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: #FFF7E0;
+  border: 1px solid #F5DFA0;
+  color: #6B4E00;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+}
+.viewing-banner[hidden] { display: none; }
+.profile-switch-btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid var(--card-border);
+  background: #FFF;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+}
+.profile-switch-btn.active { border-color: #FFB3C1; background: #FFF0F3; color: var(--accent-text); }
+.profile-switch-btn.active::after { content: ' ✓'; }
+.settings-section input[type="date"].input-field { min-height: 44px; }
+
+/* 미션 전적 & 수량 입력 창 */
+.mission-record {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-weight: 700;
+  background: #FAF8F6;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.mission-record[hidden] { display: none; }
+.mission-record b.bf { color: #1976D2; }
+.mission-record b.gf { color: #C2185B; }
+.amount-mission-title { font-size: var(--fs-md); font-weight: 800; color: var(--text-main); }
+.amount-current { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 2px; }
+.amount-input-row { display: flex; align-items: center; gap: 8px; margin: 14px 0; font-size: var(--fs-md); font-weight: 700; color: var(--text-muted); }
+.amount-input-row .input-field { flex: 1; min-width: 0; text-align: center; font-size: 1.6rem; font-weight: 800; padding: 12px; }
+.amount-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.amount-btn { border: none; border-radius: var(--radius-pill, 24px); font-weight: 800; cursor: pointer; }
+.amount-actions .btn-primary { border-radius: var(--radius-pill, 24px); }
+
+/* 걸음 목표 */
+.goal-hit { color: #1B5E20; font-weight: 800; white-space: nowrap; }
+
+/* 타이머 내 루틴 */
+.timer-custom-presets { display: contents; }
+.timer-preset-row .preset-mine { background: #FFF8E1; border-color: #F5DFA0; color: #6B4E00; }
+.routine-save-box { margin-top: 18px; padding-top: 14px; border-top: 1px dashed #E6DED8; }
+.saved-routine-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.saved-routine { display: flex; align-items: center; gap: 6px; background: #FAF8F6; border-radius: 12px; padding: 4px 6px 4px 4px; }
+.saved-routine-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.saved-routine-main b { font-size: var(--fs-sm); color: var(--text-main); }
+.saved-routine-main span { font-size: var(--fs-xs); color: var(--text-muted); }
+.pin-form-row > div { min-width: 0; }
+.pin-form-row .input-field { width: 100%; min-width: 0; box-sizing: border-box; }

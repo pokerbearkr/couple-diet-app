@@ -10,12 +10,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="CoupleFit">
   <meta name="theme-color" content="#FFE1E9">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=5.5">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5.5">
-  <link rel="manifest" href="manifest.json?v=5.5">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=5.6">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5.6">
+  <link rel="manifest" href="manifest.json?v=5.6">
 
   <!-- Stylesheet with Cache Busting -->
-  <link rel="stylesheet" href="style.css?v=5.5">
+  <link rel="stylesheet" href="style.css?v=5.6">
 
   <!-- Inlined Critical Styles (Immune to Browser CSS Cache) -->
   <style>
@@ -138,7 +138,7 @@
     <!-- 상단 헤더 -->
     <header class="header">
       <div class="header-title-box">
-        <img src="icon-192.png?v=5.5" alt="" class="header-logo" />
+        <img src="icon-192.png?v=5.6" alt="" class="header-logo" />
         <h1 class="header-title">커플핏</h1>
       </div>
       <div class="header-actions">
@@ -148,13 +148,22 @@
       </div>
     </header>
 
-    <!-- 유저 전환 바 (오동원 <-> 김해솔) -->
+    <!-- 동기화 상태 (첫 불러오기 / 오프라인 / 저장 대기) -->
+    <button id="sync-status" class="sync-status" onclick="flushOutbox(true); loadFromSupabase(true);" hidden></button>
+
+    <!-- 다른 프로필로 보는 중일 때만 나타나는 안내 -->
+    <div id="viewing-banner" class="viewing-banner" hidden>
+      <span id="viewing-banner-text"></span>
+      <button class="btn-sm btn-ghost" onclick="returnToOwnerProfile()">내 프로필로</button>
+    </div>
+
+    <!-- 유저 전환 바: 이 폰의 기본 사용자를 아직 정하지 않았을 때만 보임 (정한 뒤에는 설정에서 전환) -->
     <div class="user-switch-bar">
       <button id="switch-bf" class="switch-pill active-bf" onclick="handleProfileSwitchClick('boyfriend')">
-        <span>🏃‍♂️</span> <span>오동원 (남친)</span>
+        <span>🏃‍♂️</span> <span data-name="bf" data-name-suffix=" (남친)">오동원 (남친)</span>
       </button>
       <button id="switch-gf" class="switch-pill" onclick="handleProfileSwitchClick('girlfriend')">
-        <span>🐰</span> <span>김해솔 (여친)</span>
+        <span>🐰</span> <span data-name="gf" data-name-suffix=" (여친)">김해솔 (여친)</span>
       </button>
     </div>
 
@@ -226,8 +235,8 @@
 
           <!-- 범례 가이드 -->
           <div class="calendar-legend-bar">
-            <div class="legend-item"><span>🏃‍♂️</span> 오동원</div>
-            <div class="legend-item"><span>🐰</span> 김해솔</div>
+            <div class="legend-item"><span>🏃‍♂️</span> <span data-name="bf">오동원</span></div>
+            <div class="legend-item"><span>🐰</span> <span data-name="gf">김해솔</span></div>
             <div class="legend-item both"><span>💖</span> 함께 달성</div>
           </div>
         </div>
@@ -293,8 +302,8 @@
             <div class="step-chart-head">
               <span class="section-label flat">최근 7일 걸음 수</span>
               <span class="chart-legend">
-                <span class="legend-dot bf"></span>오동원
-                <span class="legend-dot gf"></span>김해솔
+                <span class="legend-dot bf"></span><span data-name="bf">오동원</span>
+                <span class="legend-dot gf"></span><span data-name="gf">김해솔</span>
               </span>
             </div>
             <canvas id="weekly-step-chart" class="step-chart" aria-label="최근 7일 걸음 수 막대 그래프"></canvas>
@@ -464,10 +473,11 @@
           <div class="card-title-row">
             <div>
               <div class="card-title"><span>⚔️</span> 주간 미션 대결</div>
-              <span class="card-subtitle">매주 월요일 0시에 새로 시작해요</span>
+              <span class="card-subtitle">월요일 0시에 자동 정산하고 새로 시작해요</span>
             </div>
             <button class="btn-sm btn-primary" onclick="openCreateMissionModal()">+ 미션</button>
           </div>
+          <div id="mission-record" class="mission-record" hidden></div>
           <div id="missions-list"></div>
         </div>
 
@@ -543,6 +553,7 @@
 
           <!-- 원터치 루틴 프리셋 (가로 스크롤) -->
           <div class="timer-preset-row">
+            <span id="timer-custom-presets" class="timer-custom-presets"></span>
             <button class="quick-chip preset-haesol" onclick="applyTimerPreset('haesol_2m')">🐰 해솔이 2분</button>
             <button class="quick-chip" onclick="applyTimerPreset('interval_1m')">⚡ 1분 루틴</button>
             <button class="quick-chip" onclick="applyTimerPreset('tabata')">🔥 타바타 20/10</button>
@@ -664,12 +675,50 @@
           <div class="owner-radio-row">
             <label class="owner-radio">
               <input type="radio" name="device-owner-role" value="boyfriend" onchange="setDeviceDefaultOwner('boyfriend')" />
-              <span class="bf-text">🏃‍♂️ 오동원</span>
+              <span class="bf-text">🏃‍♂️ <span data-name="bf">오동원</span></span>
             </label>
             <label class="owner-radio">
               <input type="radio" name="device-owner-role" value="girlfriend" onchange="setDeviceDefaultOwner('girlfriend')" />
-              <span class="gf-text">🐰 김해솔</span>
+              <span class="gf-text">🐰 <span data-name="gf">김해솔</span></span>
             </label>
+          </div>
+        </div>
+
+        <!-- 1-1. 프로필 전환 (상대 프로필로 잠깐 보기) -->
+        <div class="settings-section">
+          <label class="settings-label">👀 프로필 전환</label>
+          <div class="settings-help">상대 프로필로 볼 때는 그 사람의 PIN이 필요해요.</div>
+          <div class="owner-radio-row">
+            <button id="settings-switch-bf" class="profile-switch-btn" onclick="switchProfileFromSettings('boyfriend')">🏃‍♂️ <span data-name="bf">오동원</span></button>
+            <button id="settings-switch-gf" class="profile-switch-btn" onclick="switchProfileFromSettings('girlfriend')">🐰 <span data-name="gf">김해솔</span></button>
+          </div>
+        </div>
+
+        <!-- 1-2. 커플 정보 (두 폰에 함께 적용) -->
+        <div class="settings-section">
+          <label class="settings-label">💑 커플 정보</label>
+          <div class="settings-help">바꾸면 두 사람 폰에 함께 적용돼요. 아래 '설정 저장하기'를 눌러야 저장돼요.</div>
+          <div class="pin-form">
+            <div class="pin-form-row">
+              <div>
+                <label class="field-label" for="cfg-bf-name">🏃‍♂️ 남자친구 이름</label>
+                <input type="text" id="cfg-bf-name" class="input-field" maxlength="10" />
+              </div>
+              <div>
+                <label class="field-label" for="cfg-gf-name">🐰 여자친구 이름</label>
+                <input type="text" id="cfg-gf-name" class="input-field" maxlength="10" />
+              </div>
+            </div>
+            <div class="pin-form-row">
+              <div>
+                <label class="field-label" for="cfg-dday">💕 사귄 날짜</label>
+                <input type="date" id="cfg-dday" class="input-field" />
+              </div>
+              <div>
+                <label class="field-label" for="cfg-step-goal">👟 하루 걸음 목표</label>
+                <input type="number" inputmode="numeric" id="cfg-step-goal" class="input-field" min="1000" max="50000" step="500" />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -784,11 +833,11 @@
           <div style="display:flex; gap:8px;">
             <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer;">
               <input type="radio" name="penalty-loser" value="boyfriend" checked />
-              <span style="font-size:var(--fs-sm); font-weight:700; color:#1976D2;">🏃‍♂️ 오동원</span>
+              <span style="font-size:var(--fs-sm); font-weight:700; color:#1976D2;">🏃‍♂️ <span data-name="bf">오동원</span></span>
             </label>
             <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:1.5px solid var(--card-border); border-radius:10px; cursor:pointer;">
               <input type="radio" name="penalty-loser" value="girlfriend" />
-              <span style="font-size:var(--fs-sm); font-weight:700; color:#D81B60;">🐰 김해솔</span>
+              <span style="font-size:var(--fs-sm); font-weight:700; color:#D81B60;">🐰 <span data-name="gf">김해솔</span></span>
             </label>
           </div>
         </div>
@@ -820,10 +869,10 @@
           <label style="font-size:var(--fs-xs); font-weight:700; color:var(--text-muted); display:block; margin-bottom:6px;">🎉 이번 대결의 승자는 누구인가요?</label>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <button class="btn-primary" style="background:linear-gradient(135deg, #42A5F5, #1E88E5); padding:12px; font-size:var(--fs-md);" onclick="confirmSettleWinner('boyfriend')">
-              🏃‍♂️ 오동원 승리! (김해솔 벌칙 확정)
+              🏃‍♂️ <span data-name="bf">오동원</span> 승리! (<span data-name="gf">김해솔</span> 벌칙)
             </button>
             <button class="btn-primary" style="background:linear-gradient(135deg, #FF69B4, #E91E63); padding:12px; font-size:var(--fs-md);" onclick="confirmSettleWinner('girlfriend')">
-              🐰 김해솔 승리! (오동원 벌칙 확정)
+              🐰 <span data-name="gf">김해솔</span> 승리! (<span data-name="bf">오동원</span> 벌칙)
             </button>
           </div>
         </div>
@@ -910,6 +959,37 @@
         </div>
 
         <button class="btn-primary btn-block btn-lg" onclick="applyTimerSettings()">타이머 적용하기 ✨</button>
+
+        <!-- 내 루틴 저장 -->
+        <div class="routine-save-box">
+          <label class="field-label" for="timer-routine-name">⭐ 위 설정을 내 루틴으로 저장</label>
+          <div class="inline-send-bar compact">
+            <input type="text" id="timer-routine-name" maxlength="12" placeholder="루틴 이름 (예: 아침 러닝)" />
+            <button class="btn-primary" onclick="saveCurrentTimerRoutine()">저장</button>
+          </div>
+          <div id="timer-saved-list" class="saved-routine-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 미션 진행 수량 직접 입력 -->
+    <div id="modal-mission-amount" class="modal-overlay">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h3 class="modal-title">✏️ 수량 직접 입력</h3>
+          <button class="icon-btn modal-close" onclick="closeModal('modal-mission-amount')" aria-label="닫기">✕</button>
+        </div>
+        <div id="mission-amount-title" class="amount-mission-title"></div>
+        <div id="mission-amount-current" class="amount-current"></div>
+        <div class="amount-input-row">
+          <input type="number" inputmode="numeric" min="0" id="mission-amount-input" class="input-field" placeholder="0" />
+          <span id="mission-amount-unit"></span>
+        </div>
+        <div class="amount-actions">
+          <button class="btn-primary btn-lg" onclick="applyMissionAmount('add')">＋ 더하기</button>
+          <button class="btn-lg btn-ghost amount-btn" onclick="applyMissionAmount('sub')">－ 빼기</button>
+        </div>
+        <button class="text-btn" onclick="applyMissionAmount('set')">입력한 숫자로 맞추기</button>
       </div>
     </div>
 
@@ -1043,6 +1123,6 @@
   </div>
 
   <!-- Application Logic with Cache Busting -->
-  <script src="app.js?v=5.5"></script>
+  <script src="app.js?v=5.6"></script>
 </body>
 </html>
