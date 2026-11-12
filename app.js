@@ -912,6 +912,7 @@ function saveGoalWeight() {
   const input = document.getElementById('goal-weight-input');
   if (!input) return;
   const raw = input.value.trim();
+  let goalValue = null;
   try {
     if (raw === '') {
       localStorage.removeItem('couple_goal_weight_' + role);
@@ -919,8 +920,11 @@ function saveGoalWeight() {
       const v = parseFloat(raw);
       if (isNaN(v) || v <= 20 || v >= 250) return showToast('올바른 목표 체중(kg)을 입력해주세요!');
       localStorage.setItem('couple_goal_weight_' + role, String(v));
+      goalValue = v;
     }
   } catch (e) {}
+  goalWeightPushedOnce = true;
+  syncGoalWeightToSupabase(role, goalValue);
   input.blur();
   sfx.playSuccess();
   renderStatsScreen();
@@ -2116,6 +2120,16 @@ async function confirmSettleWinner(winnerRole) {
 
   store.data.penalties.unshift(newPenalty);
 
+  recordMissionResult({
+    mission_id: m.id,
+    title: String(m.title || '').slice(0, 100),
+    week_start: dateToStr(getWeekStartDate()),
+    bf_progress: m.bfProgress || 0,
+    gf_progress: m.gfProgress || 0,
+    winner_role: winnerRole,
+    penalty: String(m.penalty || '').slice(0, 150)
+  });
+
   // 미션 진행률 리셋 (다음 라운드 시작)
   m.bfProgress = 0;
   m.gfProgress = 0;
@@ -3182,7 +3196,7 @@ function initSupabase() {
       console.log('✅ Supabase Cloud Connected!');
       updateCloudSyncStatusBadge(true);
       setupSupabaseRealtime();
-      loadFromSupabase();
+      probeDbFeatures().then(() => loadFromSupabase());
       startAutoSyncPolling();
     } catch (e) {
       console.error('Supabase init error:', e);
@@ -3193,6 +3207,45 @@ function initSupabase() {
   }
 }
 
+// --- DB 구조 자동 인식 ---
+// db_upgrade_5to9.sql 을 실행했는지 앱이 직접 확인해서, 실행 전에는 예전 방식 / 실행 후에는 새 구조를 씀
+const dbFeatures = {
+  reactions: false,     // diet_reactions 테이블
+  settings: false,      // couple_settings 테이블
+  userSettings: false,  // user_settings 테이블 (목표 체중)
+  weekStart: false,     // missions.week_start 칸
+  results: false,       // mission_results 테이블
+  dietUpdatedAt: false  // diet_logs.updated_at 칸
+};
+let dbFeaturesCheckedAt = 0;
+
+async function probeDbFeatures() {
+  if (!supabaseClient) return;
+  dbFeaturesCheckedAt = Date.now();
+  const probes = {
+    reactions: ['diet_reactions', 'id'],
+    settings: ['couple_settings', 'id'],
+    userSettings: ['user_settings', 'user_role'],
+    weekStart: ['missions', 'week_start'],
+    results: ['mission_results', 'id'],
+    dietUpdatedAt: ['diet_logs', 'updated_at']
+  };
+  const before = JSON.stringify(dbFeatures);
+  await Promise.all(Object.entries(probes).map(async ([key, [table, col]]) => {
+    if (dbFeatures[key]) return;
+    try {
+      const { error } = await supabaseClient.from(table).select(col).limit(1);
+      if (!error) dbFeatures[key] = true;
+    } catch (e) { /* 연결 문제면 다음 기회에 다시 확인 */ }
+  }));
+  // 새 구조가 방금 인식됐으면 실시간 구독도 새 테이블을 포함해 다시 연결
+  if (JSON.stringify(dbFeatures) !== before && realtimeChannel) setupSupabaseRealtime();
+}
+
+function allDbFeaturesReady() {
+  return Object.values(dbFeatures).every(Boolean);
+}
+
 function startAutoSyncPolling() {
   if (autoSyncInterval) clearInterval(autoSyncInterval);
   // 실시간 연결이 살아 있으면 15초, 끊겨 있으면 5초마다 가벼운 확인 (사진은 새로 생긴 것만 받음)
@@ -3200,6 +3253,10 @@ function startAutoSyncPolling() {
     if (document.hidden || !supabaseClient) return;
     const gap = realtimeConnected ? 15000 : 5000;
     if (Date.now() - lastLoadAt >= gap) loadFromSupabase(true);
+    // 아직 새 DB 구조가 없으면 1분마다 다시 확인 (SQL 실행 후 앱을 다시 켜지 않아도 전환됨)
+    if (!allDbFeaturesReady() && Date.now() - dbFeaturesCheckedAt > 60000) {
+      probeDbFeatures().then(() => loadFromSupabase(true));
+    }
   }, 2500);
 }
 
@@ -3260,6 +3317,7 @@ async function loadMoreDietLogs() {
 // 식단 사진은 용량이 커서, 자동 동기화 때는 글자 정보만 받고 사진은 처음 한 번만 받아 기억해둠
 const DIET_META_COLUMNS = 'id,user_role,date,meal_type,memo,created_at';
 const dietPhotoCache = new Map(); // id → 사진 데이터(없으면 null)
+const dietPhotoStamp = new Map(); // id → 그 사진을 받았을 때의 수정 시각(updated_at)
 let dietPhotoFetching = false;
 
 function seedDietPhotoCacheFromStore() {
@@ -3269,7 +3327,14 @@ function seedDietPhotoCacheFromStore() {
 }
 
 function mapDietRow(d) {
-  if (d.photo_url !== undefined) dietPhotoCache.set(d.id, d.photo_url || null);
+  if (d.photo_url !== undefined) {
+    dietPhotoCache.set(d.id, d.photo_url || null);
+    if (d.updated_at !== undefined) dietPhotoStamp.set(d.id, d.updated_at);
+  } else if (d.updated_at !== undefined) {
+    // 글자 정보만 받은 경우: 수정 시각이 달라졌으면 사진이 바뀌었을 수 있으니 다시 받게 함
+    if (dietPhotoStamp.has(d.id) && dietPhotoStamp.get(d.id) !== d.updated_at) dietPhotoCache.delete(d.id);
+    if (!dietPhotoCache.has(d.id) || !dietPhotoStamp.has(d.id)) dietPhotoStamp.set(d.id, d.updated_at);
+  }
   return {
     id: d.id,
     role: d.user_role,
@@ -3291,9 +3356,12 @@ async function fetchMissingDietPhotos() {
     const ids = missing.reverse();
     for (let i = 0; i < ids.length; i += 6) {
       const chunk = ids.slice(i, i + 6);
-      const { data, error } = await supabaseClient.from('diet_logs').select('id,photo_url').in('id', chunk);
+      const { data, error } = await supabaseClient.from('diet_logs').select(dbFeatures.dietUpdatedAt ? 'id,photo_url,updated_at' : 'id,photo_url').in('id', chunk);
       if (error || !Array.isArray(data)) break;
-      data.forEach(r => dietPhotoCache.set(r.id, r.photo_url || null));
+      data.forEach(r => {
+        dietPhotoCache.set(r.id, r.photo_url || null);
+        if (r.updated_at !== undefined) dietPhotoStamp.set(r.id, r.updated_at);
+      });
       chunk.forEach(id => { if (!dietPhotoCache.has(id)) dietPhotoCache.set(id, null); });
       store.data.dietLogs.forEach(d => { if (dietPhotoCache.has(d.id)) d.photoUrl = dietPhotoCache.get(d.id); });
       store.save();
@@ -3359,7 +3427,7 @@ function stateSignature() {
     d.attendance, d.stepLogs, d.weightLogs,
     (d.dietLogs || []).map(x => [x.id, x.date, x.mealType, x.memo, x.photoUrl === undefined ? -1 : (x.photoUrl ? x.photoUrl.length : 0)]),
     d.cheers, (d.missions || []).map(m => [m.id, m.title, m.target, m.unit, m.bfProgress, m.gfProgress, m.penalty]),
-    d.coupons, d.penalties, d.foodWishlist, d.couple, d.pins
+    d.coupons, d.penalties, d.foodWishlist, d.couple, d.pins, d.missionResults || null, getGoalWeight(d.currentRole)
   ]);
 }
 
@@ -3372,6 +3440,7 @@ async function loadFromSupabase(silent = false) {
     if (outbox.length > 0) return;
   }
   lastLoadAt = Date.now();
+  if (dbFeaturesCheckedAt === 0) await probeDbFeatures();
   const signatureBefore = stateSignature();
   try {
     // 1. 출석 불러오기 (취소/해제 동기화를 위해 서버 기준으로 재구성)
@@ -3419,7 +3488,7 @@ async function loadFromSupabase(silent = false) {
     // 4. 식단 불러오기 (최신순 30개 페이징으로 속도 10배 향상 및 데이터 절약)
     const { data: dietList, error: dietErr } = await supabaseClient
       .from('diet_logs')
-      .select(DIET_META_COLUMNS)
+      .select(dbFeatures.dietUpdatedAt ? DIET_META_COLUMNS + ',updated_at' : DIET_META_COLUMNS)
       .order('created_at', { ascending: false })
       .limit(DIET_PAGE_SIZE);
     if (!dietErr && Array.isArray(dietList)) {
@@ -3439,7 +3508,7 @@ async function loadFromSupabase(silent = false) {
     // 5. 칭찬 불러오기 (날짜 및 시간 포함)
     const { data: cheerList, error: cheerErr } = await supabaseClient.from('cheers').select('*').order('created_at', { ascending: true });
     if (!cheerErr && Array.isArray(cheerList)) {
-      store.data.cheers = cheerList.map(c => ({
+      let cheers = cheerList.map(c => ({
         id: c.id,
         sender: c.sender_role,
         senderName: c.sender_name,
@@ -3447,6 +3516,25 @@ async function loadFromSupabase(silent = false) {
         createdAt: c.created_at,
         time: formatCheerTimestamp(c.created_at)
       }));
+
+      // 식단 반응: 새 구조에서는 diet_reactions 테이블에서 읽어 같은 모양으로 합침
+      if (dbFeatures.reactions) {
+        const { data: rxList, error: rxErr } = await supabaseClient.from('diet_reactions').select('*').order('created_at', { ascending: true });
+        if (!rxErr && Array.isArray(rxList)) {
+          migrateLegacyDietReactions(cheers.filter(isDietReaction)); // 예전 방식으로 남아 있는 반응은 새 테이블로 옮김
+          const known = new Set(rxList.map(r => r.id));
+          cheers = cheers.filter(c => !(isDietReaction(c) && known.has(c.id)));
+          rxList.forEach(r => cheers.push({
+            id: r.id,
+            sender: r.user_role,
+            senderName: nmFull(r.user_role),
+            message: `::diet:${r.diet_id}::${r.kind === 'heart' ? DIET_HEART : (r.body || '')}`,
+            createdAt: r.created_at,
+            time: formatCheerTimestamp(r.created_at)
+          }));
+        }
+      }
+      store.data.cheers = cheers;
     }
 
     // 6. 미션 불러오기
@@ -3470,7 +3558,8 @@ async function loadFromSupabase(silent = false) {
           bfProgress: m.user1_progress || 0,
           gfProgress: m.user2_progress || 0,
           penalty: m.penalty_reward,
-          periodStart: m.created_at
+          periodStart: m.created_at,
+          weekStart: missionWeekStartOf(m)
         };
         // 방금 내가 누른 진행도가 아직 서버에 반영 전이면 내 값은 로컬 값을 유지 (연타 시 숫자 튐 방지)
         const prev = prevMissions.get(m.id);
@@ -3511,19 +3600,52 @@ async function loadFromSupabase(silent = false) {
       }));
     }
 
+    // 8-1. 미션 주차별 결과 (새 구조에서 전적 계산용)
+    if (dbFeatures.results) {
+      try {
+        const { data: resList, error: resErr } = await supabaseClient.from('mission_results').select('id,winner_role');
+        if (!resErr && Array.isArray(resList)) store.data.missionResults = resList.map(r => ({ winner: r.winner_role }));
+      } catch (e) {
+        console.warn('mission_results fetch warning:', e);
+      }
+    }
+
     // 9. 커플 PIN 비밀번호 불러오기
     try {
       const { data: pinList } = await supabaseClient.from('couple_pins').select('*');
       if (pinList && pinList.length > 0) {
         if (!store.data.pins) store.data.pins = { boyfriend: '1234', girlfriend: '1234' };
+        const legacyCfg = [];
         pinList.forEach(p => {
           if (!p.user_role || !p.pin) return;
-          if (String(p.user_role).startsWith('cfg_')) applyCoupleConfigRow(p.user_role, p.pin);
-          else store.data.pins[p.user_role] = String(p.pin);
+          if (String(p.user_role).startsWith('cfg_')) {
+            applyCoupleConfigRow(p.user_role, p.pin);
+            legacyCfg.push(p);
+          } else {
+            store.data.pins[p.user_role] = String(p.pin);
+          }
         });
+        // 새 구조: 예전 방식(cfg_ 줄)으로 남은 설정을 couple_settings 로 옮기고 정리
+        if (dbFeatures.settings && legacyCfg.length) migrateLegacyCoupleConfig(legacyCfg);
       }
     } catch (e) {
       console.warn('couple_pins fetch warning:', e);
+    }
+
+    // 9-1. 커플 설정 / 내 목표 체중 (새 구조)
+    try {
+      if (dbFeatures.settings && migratingCoupleConfig === 0) {
+        const { data: cs, error: csErr } = await supabaseClient.from('couple_settings').select('*').limit(1);
+        if (!csErr && Array.isArray(cs) && cs[0]) {
+          applyCoupleConfigRow('cfg_bf_name', cs[0].bf_name);
+          applyCoupleConfigRow('cfg_gf_name', cs[0].gf_name);
+          applyCoupleConfigRow('cfg_dday', cs[0].dday_date);
+          applyCoupleConfigRow('cfg_step_goal', cs[0].step_goal);
+        }
+      }
+      if (dbFeatures.userSettings) await syncGoalWeightFromServer();
+    } catch (e) {
+      console.warn('settings fetch warning:', e);
     }
 
     // 10. 먹방 위시리스트 불러오기
@@ -3611,7 +3733,7 @@ function setupSupabaseRealtime() {
   }
 
   // 모든 핵심 테이블 실시간 WebSocket 구독
-  realtimeChannel = supabaseClient
+  let channel = supabaseClient
     .channel('couple_realtime_all_' + Date.now())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, (payload) => {
       loadFromSupabase();
@@ -3675,7 +3797,26 @@ function setupSupabaseRealtime() {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'food_wishlist' }, () => {
       loadFromSupabase();
-    })
+    });
+
+  // 새 DB 구조의 테이블 (있을 때만 구독)
+  if (dbFeatures.reactions) {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'diet_reactions' }, (payload) => {
+      loadFromSupabase();
+      const r = payload.new;
+      if (payload.eventType === 'INSERT' && r && r.user_role && r.user_role !== store.data.currentRole) {
+        showSystemNotification(`🥗 ${nmFull(r.user_role)}님이 식단에 반응했어요`, r.kind === 'heart' ? DIET_HEART : (r.body || ''));
+      }
+    });
+  }
+  if (dbFeatures.settings) {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'couple_settings' }, () => loadFromSupabase());
+  }
+  if (dbFeatures.results) {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'mission_results' }, () => loadFromSupabase());
+  }
+
+  realtimeChannel = channel
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         realtimeConnected = true;
@@ -3743,7 +3884,7 @@ function showToast(message, type = 'info') {
 }
 
 // --- 저장 보관함: 전송 실패한 기록을 모아뒀다가 연결되면 순서대로 다시 보냄 ---
-const SYNC_FN_NAMES = ['syncAttendanceToSupabase', 'syncStepToSupabase', 'syncWeightToSupabase', 'syncDietToSupabase', 'updateDietInSupabase', 'deleteDietFromSupabase', 'syncCheerToSupabase', 'deleteCheerFromSupabase', 'deleteDietReactionsFromSupabase', 'syncMissionToSupabase', 'syncMyMissionProgressToSupabase', 'resetMissionProgressInSupabase', 'deleteMissionFromSupabase', 'syncWishlistToSupabase', 'deleteWishlistFromSupabase', 'syncCouponToSupabase', 'syncCouponUsageToSupabase', 'deleteCouponFromSupabase', 'syncPenaltyToSupabase', 'deletePenaltyFromSupabase', 'syncPinToSupabase', 'syncConfigToSupabase'];
+const SYNC_FN_NAMES = ['syncAttendanceToSupabase', 'syncStepToSupabase', 'syncWeightToSupabase', 'syncDietToSupabase', 'updateDietInSupabase', 'deleteDietFromSupabase', 'syncCheerToSupabase', 'deleteCheerFromSupabase', 'deleteDietReactionsFromSupabase', 'syncMissionToSupabase', 'syncMyMissionProgressToSupabase', 'resetMissionProgressInSupabase', 'deleteMissionFromSupabase', 'syncWishlistToSupabase', 'deleteWishlistFromSupabase', 'syncCouponToSupabase', 'syncCouponUsageToSupabase', 'deleteCouponFromSupabase', 'syncPenaltyToSupabase', 'deletePenaltyFromSupabase', 'syncPinToSupabase', 'syncConfigToSupabase', 'syncGoalWeightToSupabase', 'syncMissionResultToSupabase'];
 const SYNC_FN_LABELS = {
   syncAttendanceToSupabase: '출석', syncStepToSupabase: '걸음 수', syncWeightToSupabase: '체중',
   syncDietToSupabase: '식단', updateDietInSupabase: '식단 수정', deleteDietFromSupabase: '식단 삭제',
@@ -3751,7 +3892,7 @@ const SYNC_FN_LABELS = {
   syncMissionToSupabase: '미션', syncMyMissionProgressToSupabase: '미션 진행도', resetMissionProgressInSupabase: '미션 정산',
   deleteMissionFromSupabase: '미션 삭제', syncWishlistToSupabase: '위시리스트', deleteWishlistFromSupabase: '위시리스트 삭제',
   syncCouponToSupabase: '쿠폰', syncCouponUsageToSupabase: '쿠폰', deleteCouponFromSupabase: '쿠폰 삭제',
-  syncPenaltyToSupabase: '벌칙', deletePenaltyFromSupabase: '벌칙 삭제', syncPinToSupabase: '설정', syncConfigToSupabase: '설정'
+  syncPenaltyToSupabase: '벌칙', deletePenaltyFromSupabase: '벌칙 삭제', syncPinToSupabase: '설정', syncConfigToSupabase: '설정', syncGoalWeightToSupabase: '목표 체중', syncMissionResultToSupabase: '미션 결과'
 };
 const SYNC_ORIGINALS = {};
 const OUTBOX_KEY = 'couple_fit_outbox';
@@ -3983,13 +4124,31 @@ async function deleteDietFromSupabase(dietId) {
 async function syncCheerToSupabase(newCheer) {
   if (!supabaseClient) return;
   try {
+    const hasUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newCheer.id || '');
+    const reaction = parseDietReaction(newCheer);
+
+    // 식단 하트/댓글: 새 구조에서는 전용 테이블에 저장
+    if (reaction && dbFeatures.reactions) {
+      const row = {
+        diet_id: reaction.dietId,
+        user_role: newCheer.sender,
+        kind: reaction.text === DIET_HEART ? 'heart' : 'comment',
+        body: reaction.text === DIET_HEART ? null : reaction.text.slice(0, 200)
+      };
+      if (hasUuid) row.id = newCheer.id;
+      const { error } = await supabaseClient.from('diet_reactions').insert(row);
+      // 23505 = 이미 있는 하트(중복) → 저장된 것으로 봄 / 23503 = 그 사이 식단이 지워짐 → 보낼 필요 없음
+      if (error && error.code !== '23505' && error.code !== '23503') throw error;
+      return;
+    }
+
     const row = {
       sender_role: newCheer.sender,
       sender_name: newCheer.senderName,
       message: newCheer.message
     };
     // 로컬에서 만든 ID를 그대로 써야 나중에 하트 취소/댓글 삭제가 가능
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newCheer.id || '')) row.id = newCheer.id;
+    if (hasUuid) row.id = newCheer.id;
     const { error } = await supabaseClient.from('cheers').insert(row);
     if (error) throw error;
   } catch (e) {
@@ -4001,11 +4160,47 @@ async function syncCheerToSupabase(newCheer) {
 async function deleteCheerFromSupabase(cheerId) {
   if (!supabaseClient || !cheerId) return;
   try {
+    if (dbFeatures.reactions) {
+      const { error: rxErr } = await supabaseClient.from('diet_reactions').delete().eq('id', cheerId);
+      if (rxErr) throw rxErr;
+    }
     const { error } = await supabaseClient.from('cheers').delete().eq('id', cheerId);
     if (error) throw error;
   } catch (e) {
     console.error('Supabase cheer delete error:', e);
     throw e;
+  }
+}
+
+// 예전 방식(cheers 에 '::diet:' 로 저장)으로 남아 있는 반응을 새 테이블로 옮기고 원본을 정리
+const migratingReactionIds = new Set();
+async function migrateLegacyDietReactions(legacyCheers) {
+  if (!supabaseClient || !dbFeatures.reactions) return;
+  for (const c of legacyCheers) {
+    if (!c.id || migratingReactionIds.has(c.id)) continue;
+    migratingReactionIds.add(c.id);
+    const r = parseDietReaction(c);
+    try {
+      let done = false;
+      if (r && r.text && (c.sender === 'boyfriend' || c.sender === 'girlfriend')) {
+        const { error } = await supabaseClient.from('diet_reactions').insert({
+          id: c.id,
+          diet_id: r.dietId,
+          user_role: c.sender,
+          kind: r.text === DIET_HEART ? 'heart' : 'comment',
+          body: r.text === DIET_HEART ? null : r.text.slice(0, 200),
+          created_at: c.createdAt
+        });
+        // 이미 옮겨졌거나(23505), 식단이 없어졌거나(23503), ID 형식이 잘못된(22P02) 경우는 원본만 정리
+        done = !error || ['23505', '23503', '22P02'].includes(error.code);
+      } else {
+        done = true;
+      }
+      if (done) await supabaseClient.from('cheers').delete().eq('id', c.id);
+      else migratingReactionIds.delete(c.id);
+    } catch (e) {
+      migratingReactionIds.delete(c.id);
+    }
   }
 }
 
@@ -4044,16 +4239,19 @@ async function syncMissionToSupabase(m) {
 
 // 서버에 미션 새로 만들기 (created_at = 이번 주 월요일 0시 → 주간 기간 표식으로 사용)
 async function insertMissionToSupabase(m) {
-  const { error } = await supabaseClient.from('missions').upsert({
+  const row = {
     id: m.id,
     title: m.title,
     target_count: m.target,
     unit: m.unit,
     user1_progress: m.bfProgress || 0,
     user2_progress: m.gfProgress || 0,
-    penalty_reward: m.penalty,
-    created_at: getWeekStartDate().toISOString()
-  });
+    penalty_reward: m.penalty
+  };
+  // 주 시작 표식: 새 구조는 week_start 칸, 예전 구조는 created_at 을 '월요일 0시'로 맞춰 사용
+  if (dbFeatures.weekStart) row.week_start = dateToStr(getWeekStartDate());
+  else row.created_at = getWeekStartDate().toISOString();
+  const { error } = await supabaseClient.from('missions').upsert(row);
   if (error) throw error;
 }
 
@@ -4097,6 +4295,9 @@ async function resetMissionProgressInSupabase(m) {
 // - 이전 버전에서 만든 미션(표식 없음)이면 → 진행도는 유지하고 이번 주 표식만 붙임
 async function applyWeeklyMissionResetRemote(missionRows) {
   if (!supabaseClient || !Array.isArray(missionRows)) return false;
+  if (dbFeatures.weekStart) return applyWeeklyMissionResetByWeekStart(missionRows);
+
+  // --- 예전 구조: created_at 을 '월요일 0시' 표식으로 사용 ---
   const weekStart = getWeekStartDate();
   const weekStartIso = weekStart.toISOString();
   let changed = false;
@@ -4131,6 +4332,75 @@ async function applyWeeklyMissionResetRemote(missionRows) {
   return changed;
 }
 
+// 미션이 속한 주의 시작일(YYYY-MM-DD). week_start 칸이 비어 있으면 예전 표식(created_at)에서 읽음
+function missionWeekStartOf(row) {
+  if (row.week_start) return String(row.week_start).slice(0, 10);
+  const ts = row.created_at ? new Date(row.created_at) : null;
+  if (ts && !isNaN(ts.getTime()) && isWeekStartMoment(ts)) return dateToStr(ts);
+  return null;
+}
+
+// --- 새 구조: missions.week_start 로 주간 초기화 + mission_results 에 결과 기록 ---
+async function applyWeeklyMissionResetByWeekStart(missionRows) {
+  const cur = dateToStr(getWeekStartDate());
+  let changed = false;
+
+  for (const row of missionRows) {
+    const prev = missionWeekStartOf(row);
+    if (prev && prev >= cur) {
+      // 표식은 이번 주인데 칸만 비어 있으면 채워둠
+      if (!row.week_start) {
+        const { error } = await supabaseClient.from('missions').update({ week_start: prev }).eq('id', row.id).is('week_start', null);
+        if (!error) changed = true;
+      }
+      continue;
+    }
+
+    try {
+      if (prev) {
+        // 지난주 미션 → 진행도 0 + 이번 주로. 조건부 업데이트라 두 폰이 동시에 해도 한 번만 적용됨
+        let q = supabaseClient.from('missions')
+          .update({ user1_progress: 0, user2_progress: 0, week_start: cur })
+          .eq('id', row.id);
+        q = row.week_start ? q.eq('week_start', row.week_start) : q.is('week_start', null);
+        const { data, error } = await q.select('id');
+        if (!error) changed = true;
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const bf = row.user1_progress || 0, gf = row.user2_progress || 0;
+          const penalty = buildAutoSettlePenalty(row.title, row.penalty_reward, bf, gf, row.unit || '');
+          if (penalty) syncPenaltyToSupabase(penalty);
+          if (bf > 0 || gf > 0) {
+            recordMissionResult({
+              mission_id: row.id,
+              title: String(row.title || '').slice(0, 100),
+              week_start: prev,
+              bf_progress: bf,
+              gf_progress: gf,
+              winner_role: bf === gf ? null : (bf > gf ? 'boyfriend' : 'girlfriend'),
+              penalty: String(row.penalty_reward || '').slice(0, 150)
+            });
+          }
+        }
+      } else {
+        // 표식이 전혀 없는 예전 미션 → 진행도는 유지하고 이번 주부터 관리 시작
+        const { error } = await supabaseClient.from('missions').update({ week_start: cur }).eq('id', row.id).is('week_start', null);
+        if (!error) changed = true;
+      }
+    } catch (e) {
+      console.warn('weekly mission reset warning:', e);
+    }
+  }
+  return changed;
+}
+
+// 결과를 화면에 바로 반영하고 서버에 저장
+function recordMissionResult(result) {
+  if (!dbFeatures.results) return;
+  if (!Array.isArray(store.data.missionResults)) store.data.missionResults = [];
+  store.data.missionResults.push({ winner: result.winner_role });
+  syncMissionResultToSupabase(result);
+}
+
 // 지난주 미션 자동 정산: 진행도가 높은 쪽이 승리, 진 쪽에게 벌칙 등록 (동점이거나 둘 다 0이면 무승부)
 function buildAutoSettlePenalty(title, penaltyText, bfProgress, gfProgress, unit) {
   if (bfProgress === gfProgress) {
@@ -4156,6 +4426,11 @@ function buildAutoSettlePenalty(title, penaltyText, bfProgress, gfProgress, unit
 // 미션 전적: 미션에서 나온 벌칙 기록으로 계산 (직접 등록한 벌칙은 제외)
 function getMissionRecord() {
   const rec = { boyfriend: 0, girlfriend: 0 };
+  // 새 구조: 주차별 결과 기록으로 계산 (벌칙을 지워도 전적은 그대로)
+  if (dbFeatures.results && Array.isArray(store.data.missionResults)) {
+    store.data.missionResults.forEach(r => { if (rec[r.winner] !== undefined) rec[r.winner]++; });
+    return rec;
+  }
   (store.data.penalties || []).forEach(p => {
     if (!p.fromMission || p.fromMission === '직접 등록한 벌칙') return;
     if (p.loser === 'boyfriend') rec.girlfriend++;
@@ -4338,9 +4613,17 @@ function applyCoupleConfigRow(key, value) {
   return JSON.stringify(c) !== before;
 }
 
+const COUPLE_SETTINGS_COLUMNS = { cfg_bf_name: 'bf_name', cfg_gf_name: 'gf_name', cfg_dday: 'dday_date', cfg_step_goal: 'step_goal' };
+
 async function syncConfigToSupabase(key, value) {
   if (!supabaseClient) return;
   try {
+    if (dbFeatures.settings && COUPLE_SETTINGS_COLUMNS[key]) {
+      const col = COUPLE_SETTINGS_COLUMNS[key];
+      const val = key === 'cfg_step_goal' ? parseInt(value, 10) : String(value);
+      await mustOk(supabaseClient.from('couple_settings').upsert({ id: true, [col]: val }));
+      return;
+    }
     await mustOk(supabaseClient.from('couple_pins').upsert({
       user_role: key,
       pin: String(value),
@@ -4348,6 +4631,73 @@ async function syncConfigToSupabase(key, value) {
     }));
   } catch (err) {
     console.error('Supabase config sync error:', err);
+    throw err;
+  }
+}
+
+// 예전 방식(couple_pins 의 cfg_ 줄)으로 남아 있는 설정을 couple_settings 로 옮기고 원본을 정리
+let migratingCoupleConfig = 0;
+async function migrateLegacyCoupleConfig(rows) {
+  if (!supabaseClient || !dbFeatures.settings || migratingCoupleConfig > 0) return;
+  migratingCoupleConfig++;
+  try {
+    const patch = { id: true };
+    rows.forEach(p => {
+      const col = COUPLE_SETTINGS_COLUMNS[p.user_role];
+      const v = String(p.pin).trim();
+      if (!col || !v) return;
+      if (col === 'step_goal') { const n = parseInt(v, 10); if (n >= 1000 && n <= 50000) patch[col] = n; }
+      else if (col === 'dday_date') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) patch[col] = v; }
+      else patch[col] = v.slice(0, 20);
+    });
+    const { error } = await supabaseClient.from('couple_settings').upsert(patch);
+    if (!error) {
+      for (const p of rows) await supabaseClient.from('couple_pins').delete().eq('user_role', p.user_role);
+    }
+  } catch (e) {
+    console.warn('couple config migration warning:', e);
+  }
+  migratingCoupleConfig--;
+}
+
+// 목표 체중: 새 구조에서는 서버(user_settings)에 저장해 폰을 바꿔도 유지
+let goalWeightPushedOnce = false;
+async function syncGoalWeightFromServer() {
+  const role = store.data.currentRole;
+  const { data, error } = await supabaseClient.from('user_settings').select('*').eq('user_role', role).limit(1);
+  if (error || !Array.isArray(data)) return;
+  const key = 'couple_goal_weight_' + role;
+  const local = getGoalWeight(role);
+  try {
+    if (data[0]) {
+      const server = data[0].goal_weight_kg == null ? null : parseFloat(data[0].goal_weight_kg);
+      if (server == null) localStorage.removeItem(key);
+      else if (server !== local) localStorage.setItem(key, String(server));
+    } else if (local != null && !goalWeightPushedOnce) {
+      // 서버에 아직 없고 이 폰에만 있으면 한 번 올려둠
+      goalWeightPushedOnce = true;
+      syncGoalWeightToSupabase(role, local);
+    }
+  } catch (e) {}
+}
+
+async function syncGoalWeightToSupabase(role, value) {
+  if (!supabaseClient || !dbFeatures.userSettings) return;
+  try {
+    await mustOk(supabaseClient.from('user_settings').upsert({ user_role: role, goal_weight_kg: value }));
+  } catch (err) {
+    console.error('Supabase goal weight sync error:', err);
+    throw err;
+  }
+}
+
+// 미션 주차별 결과 저장 (새 구조에서만)
+async function syncMissionResultToSupabase(result) {
+  if (!supabaseClient || !dbFeatures.results) return;
+  try {
+    await mustOk(supabaseClient.from('mission_results').insert(result));
+  } catch (err) {
+    console.error('Supabase mission result sync error:', err);
     throw err;
   }
 }
