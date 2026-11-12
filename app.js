@@ -4142,11 +4142,11 @@ function buildAutoSettlePenalty(title, penaltyText, bfProgress, gfProgress, unit
   showToast(`🏆 지난주 '${title}' 자동 정산\n${nm(winner)} 승리! (${bfProgress} : ${gfProgress})`, 'success');
   return {
     id: generateUUID(),
-    title: penaltyText || '벌칙',
+    title: String(penaltyText || '벌칙').slice(0, 150),
     loser,
     loserName: nmFull(loser),
     targetName: nmFull(winner),
-    fromMission: `${title} (자동 정산 ${bfProgress}:${gfProgress})`,
+    fromMission: `${String(title).slice(0, 70)} (자동 정산 ${bfProgress}:${gfProgress})`, // DB 칸이 100자라 제목을 잘라 넣음
     completed: false,
     completedAt: null,
     createdAt: getTodayStr()
