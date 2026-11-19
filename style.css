@@ -1953,3 +1953,5 @@ body.owner-set .user-switch-bar { display: none; }
 .saved-routine-main span { font-size: var(--fs-xs); color: var(--text-muted); }
 .pin-form-row > div { min-width: 0; }
 .pin-form-row .input-field { width: 100%; min-width: 0; box-sizing: border-box; }
+
+.sync-status { white-space: pre-line; line-height: 1.5; }

@@ -1058,7 +1058,7 @@ function getReportWeekDays() {
 
 // 그 주의 식단 기록 수 (사진 없이 가볍게 조회, 1분 캐시)
 async function refreshWeekDietCounts(startStr, endStr) {
-  if (!supabaseClient) return;
+  if (!supabaseClient || serverRestricted) return;
   const cached = weekDietCountCache[startStr];
   if (cached && Date.now() - cached.t < 60000) return;
   weekDietCountCache[startStr] = { ...(cached || {}), t: Date.now() };
@@ -1459,7 +1459,7 @@ function renderDietScreen() {
   });
 
   // 전체 보기일 때만 '이전 기록 더 보기' 버튼 표시
-  if (!selectedDietFilterDate && supabaseClient && !dietNoMoreOlder) {
+  if (!selectedDietFilterDate && supabaseClient && !dietNoMoreOlder && !serverRestricted) {
     const more = document.createElement('button');
     more.className = 'text-btn diet-more-btn';
     more.disabled = dietOlderLoading;
@@ -3194,9 +3194,11 @@ function initSupabase() {
     try {
       supabaseClient = window.supabase.createClient(url, key);
       console.log('✅ Supabase Cloud Connected!');
+      updateSyncStatus(); // 정지 상태가 저장돼 있으면 바로 표시
       updateCloudSyncStatusBadge(true);
       setupSupabaseRealtime();
-      probeDbFeatures().then(() => loadFromSupabase());
+      if (serverRestricted) loadFromSupabase(); // 정지 중: 하루가 지났을 때만 실제로 확인함
+      else probeDbFeatures().then(() => loadFromSupabase());
       startAutoSyncPolling();
     } catch (e) {
       console.error('Supabase init error:', e);
@@ -3221,6 +3223,7 @@ let dbFeaturesCheckedAt = 0;
 
 async function probeDbFeatures() {
   if (!supabaseClient) return;
+  if (serverRestricted) return; // 정지 중에는 확인하지 않음 (풀린 뒤 다시 확인)
   dbFeaturesCheckedAt = Date.now();
   let unreachable = false;
   const probes = {
@@ -3255,9 +3258,12 @@ function startAutoSyncPolling() {
   // 실시간 연결이 살아 있으면 15초, 끊겨 있으면 5초마다 가벼운 확인 (사진은 새로 생긴 것만 받음)
   autoSyncInterval = setInterval(() => {
     if (document.hidden || !supabaseClient) return;
-    const gap = serverRestricted ? 600000 : (realtimeConnected ? 15000 : 5000);
+    if (serverRestricted) {
+      if (restrictedCheckDue()) loadFromSupabase(true);
+      return;
+    }
+    const gap = realtimeConnected ? 15000 : 5000;
     if (Date.now() - lastLoadAt >= gap) loadFromSupabase(true);
-    if (serverRestricted) return;
     // 아직 새 DB 구조가 없으면 1분마다 다시 확인 (SQL 실행 후 앱을 다시 켜지 않아도 전환됨)
     if (!allDbFeaturesReady() && Date.now() - dbFeaturesCheckedAt > 60000) {
       probeDbFeatures().then(() => loadFromSupabase(true));
@@ -3290,6 +3296,7 @@ let dietOlderLoading = false;
 
 // 식단 피드 '이전 기록 더 보기'
 async function loadMoreDietLogs() {
+  if (serverRestricted) return showToast('서버가 일시 정지 중이라 이전 기록을 불러올 수 없어요.', 'warn');
   if (!supabaseClient || dietOlderLoading || dietNoMoreOlder) return;
   const paged = store.data.dietLogs.filter(d => d.createdAt && (!d._older || d._paged));
   if (!paged.length) return;
@@ -3381,7 +3388,7 @@ async function fetchMissingDietPhotos() {
 
 // 특정 날짜의 식단 기록을 서버에서 조회 (실패 시 null)
 async function fetchDietRowsForDate(dateStr) {
-  if (!supabaseClient || !dateStr) return null;
+  if (!supabaseClient || !dateStr || serverRestricted) return null;
   try {
     const { data, error } = await supabaseClient
       .from('diet_logs')
@@ -3411,7 +3418,7 @@ function mergeDietLogs(baseLogs, extraLogs) {
 
 // 날짜 필터 선택 시 해당 날짜 기록을 서버에서 바로 불러와 표시
 async function loadDietLogsForFilterDate(dateStr) {
-  if (!supabaseClient || !dateStr) return;
+  if (!supabaseClient || !dateStr || serverRestricted) return;
   dietFilterLoadingDate = dateStr;
   if (currentTab === 'diet') renderDietScreen();
 
@@ -3436,8 +3443,10 @@ function stateSignature() {
   ]);
 }
 
-async function loadFromSupabase(silent = false) {
+async function loadFromSupabase(silent = false, force = false) {
   if (!supabaseClient) return;
+  // 서버 정지 중이면 하루에 한 번만 확인 (상태 표시를 눌렀을 때는 바로 확인)
+  if (serverRestricted && !force && !restrictedCheckDue()) return;
   // 보내는 중이거나 밀린 기록이 있으면, 서버의 옛 데이터로 덮어쓰지 않도록 먼저 보내고 나서 불러옴
   if (syncInFlight > 0) return;
   lastLoadAt = Date.now();
@@ -3742,6 +3751,7 @@ function showSystemNotification(title, body) {
 
 function setupSupabaseRealtime() {
   if (!supabaseClient) return;
+  if (serverRestricted) return; // 정지 중에는 실시간 연결을 만들지 않음
 
   if (realtimeChannel) {
     try {
@@ -3848,7 +3858,7 @@ function setupSupabaseRealtime() {
 // 화면 복귀 (앱 전환/잠금 해제/네트워크 복구) 시 즉각 자동 동기화 및 WakeLock 재요청
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    if (isTimerRunning) {
+    if (typeof timerRunning !== 'undefined' && timerRunning) {
       enableScreenWakeLock();
     }
     if (supabaseClient) {
@@ -3918,7 +3928,34 @@ let outboxFlushing = false;
 let syncInFlight = 0;
 let initialSyncDone = false;
 let lastLoadOffline = false;
-let serverRestricted = false; // Supabase 무료 사용량 초과로 서버가 402로 응답하는 상태
+// Supabase 무료 사용량 초과로 서버가 402로 응답하는 상태.
+// 정지 중에는 하루에 한 번만 서버를 확인함 (앱을 다시 켜도 기억). 상태 표시를 누르면 바로 확인.
+const RESTRICT_KEY = 'couple_server_restricted_checked_at';
+const RESTRICT_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
+let lastRestrictCheckAt = 0;
+let serverRestricted = false;
+try {
+  const savedAt = parseInt(localStorage.getItem(RESTRICT_KEY) || '0', 10);
+  if (savedAt > 0) { serverRestricted = true; lastRestrictCheckAt = savedAt; }
+} catch (e) {}
+
+// 정지 중이면, 마지막 확인 후 하루가 지났을 때만 true
+function restrictedCheckDue() {
+  return !serverRestricted || Date.now() - lastRestrictCheckAt >= RESTRICT_CHECK_INTERVAL;
+}
+function nextRestrictCheckLabel() {
+  const d = new Date(lastRestrictCheckAt + RESTRICT_CHECK_INTERVAL);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return sameDay ? `오늘 ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+// 상태 표시를 눌렀을 때: 기다리지 않고 지금 바로 확인
+async function manualSyncCheck() {
+  await loadFromSupabase(true, true);
+  if (serverRestricted) showToast('서버가 아직 일시 정지 상태예요. 풀리면 자동으로 올릴게요.', 'warn');
+  else if (outbox.length > 0) flushOutbox(true);
+}
 let offlineToastAt = 0;
 
 try {
@@ -3957,14 +3994,31 @@ function isRestrictedResponse(res) {
 }
 
 function markServerRestricted(on) {
-  if (serverRestricted === on) return;
+  if (on) {
+    // 정지 확인 시각을 기록 (하루 뒤에 다시 확인)
+    lastRestrictCheckAt = Date.now();
+    try { localStorage.setItem(RESTRICT_KEY, String(lastRestrictCheckAt)); } catch (e) {}
+  }
+  if (serverRestricted === on) { updateSyncStatus(); return; }
   serverRestricted = on;
   if (on) {
-    showToast('⏸️ 서버가 무료 사용량 초과로 일시 정지됐어요.\n기록은 폰에 모아뒀다가 풀리면 자동으로 올릴게요.', 'warn');
+    stopRealtimeWhileRestricted();
+    showToast('⏸️ 서버가 무료 사용량 초과로 일시 정지됐어요.\n기록은 폰에 모아뒀다가 풀리면 자동으로 올릴게요.\n서버는 하루에 한 번만 확인해요.', 'warn');
   } else {
+    try { localStorage.removeItem(RESTRICT_KEY); } catch (e) {}
+    setupSupabaseRealtime();
     showToast('✅ 서버 연결이 다시 됐어요. 모아둔 기록을 올리는 중이에요.', 'success');
   }
   updateSyncStatus();
+}
+
+// 정지 중에는 실시간 연결(재접속 시도 포함)도 끊어둠
+function stopRealtimeWhileRestricted() {
+  if (realtimeChannel && supabaseClient) {
+    try { supabaseClient.removeChannel(realtimeChannel); } catch (e) {}
+  }
+  realtimeChannel = null;
+  realtimeConnected = false;
 }
 
 async function mustOk(query) {
@@ -4015,6 +4069,12 @@ function handleSyncFailure(name, args, err) {
 
 async function runSync(name, args) {
   if (!supabaseClient) return;
+  // 서버 정지 중: 서버에 보내지 않고 바로 폰에 보관
+  if (serverRestricted) {
+    outbox.push({ name, args, at: Date.now() });
+    persistOutbox();
+    return;
+  }
   // 이미 밀린 기록이 있으면 순서를 지키기 위해 뒤에 줄 세움
   if (outbox.length > 0) {
     outbox.push({ name, args, at: Date.now() });
@@ -4034,6 +4094,7 @@ async function runSync(name, args) {
 
 async function flushOutbox(manual = false) {
   if (!supabaseClient || outboxFlushing || outbox.length === 0) return;
+  if (serverRestricted) return; // 정지 중에는 보내지 않음 (풀린 것이 확인되면 불러오기 과정에서 보냄)
   outboxFlushing = true;
   let sent = 0;
   try {
@@ -4071,7 +4132,7 @@ function updateSyncStatus() {
   if (!el) return;
   let text = '', cls = '';
   if (supabaseClient && serverRestricted) {
-    text = `⏸️ 서버 일시 정지 (무료 사용량 초과)${outbox.length ? ` · 폰에 보관 중 ${outbox.length}건` : ''}`; cls = 'pending';
+    text = `⏸️ 서버 일시 정지 (무료 사용량 초과)${outbox.length ? ` · 폰에 보관 중 ${outbox.length}건` : ''}\n다음 확인 ${nextRestrictCheckLabel()} · 눌러서 지금 확인`; cls = 'pending';
   } else if (outbox.length > 0) {
     text = `📡 저장 대기 ${outbox.length}건 · 눌러서 다시 보내기`; cls = 'pending';
   } else if (supabaseClient && lastLoadOffline) {
@@ -4765,7 +4826,7 @@ async function syncMissionResultToSupabase(result) {
 }
 
 async function refreshPinFromSupabase(role) {
-  if (!supabaseClient || !role) return;
+  if (!supabaseClient || !role || serverRestricted) return;
   try {
     const { data } = await supabaseClient.from('couple_pins').select('*').eq('user_role', role).maybeSingle();
     if (data && data.pin) {
