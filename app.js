@@ -3222,6 +3222,7 @@ let dbFeaturesCheckedAt = 0;
 async function probeDbFeatures() {
   if (!supabaseClient) return;
   dbFeaturesCheckedAt = Date.now();
+  let unreachable = false;
   const probes = {
     reactions: ['diet_reactions', 'id'],
     settings: ['couple_settings', 'id'],
@@ -3234,10 +3235,13 @@ async function probeDbFeatures() {
   await Promise.all(Object.entries(probes).map(async ([key, [table, col]]) => {
     if (dbFeatures[key]) return;
     try {
-      const { error } = await supabaseClient.from(table).select(col).limit(1);
-      if (!error) dbFeatures[key] = true;
-    } catch (e) { /* 연결 문제면 다음 기회에 다시 확인 */ }
+      const res = await supabaseClient.from(table).select(col).limit(1);
+      if (isRestrictedResponse(res)) unreachable = true;
+      else if (!res.error) dbFeatures[key] = true;
+    } catch (e) { unreachable = true; }
   }));
+  // 서버에 닿지 못했으면 '확인 안 됨'으로 남겨서 다음 불러오기 때 다시 확인
+  if (unreachable) dbFeaturesCheckedAt = 0;
   // 새 구조가 방금 인식됐으면 실시간 구독도 새 테이블을 포함해 다시 연결
   if (JSON.stringify(dbFeatures) !== before && realtimeChannel) setupSupabaseRealtime();
 }
@@ -3251,8 +3255,9 @@ function startAutoSyncPolling() {
   // 실시간 연결이 살아 있으면 15초, 끊겨 있으면 5초마다 가벼운 확인 (사진은 새로 생긴 것만 받음)
   autoSyncInterval = setInterval(() => {
     if (document.hidden || !supabaseClient) return;
-    const gap = realtimeConnected ? 15000 : 5000;
+    const gap = serverRestricted ? 600000 : (realtimeConnected ? 15000 : 5000);
     if (Date.now() - lastLoadAt >= gap) loadFromSupabase(true);
+    if (serverRestricted) return;
     // 아직 새 DB 구조가 없으면 1분마다 다시 확인 (SQL 실행 후 앱을 다시 켜지 않아도 전환됨)
     if (!allDbFeaturesReady() && Date.now() - dbFeaturesCheckedAt > 60000) {
       probeDbFeatures().then(() => loadFromSupabase(true));
@@ -3347,7 +3352,7 @@ function mapDietRow(d) {
 }
 
 async function fetchMissingDietPhotos() {
-  if (!supabaseClient || dietPhotoFetching) return;
+  if (!supabaseClient || dietPhotoFetching || serverRestricted) return;
   const missing = store.data.dietLogs.filter(d => d.photoUrl === undefined).map(d => d.id);
   if (missing.length === 0) return;
   dietPhotoFetching = true;
@@ -3435,12 +3440,24 @@ async function loadFromSupabase(silent = false) {
   if (!supabaseClient) return;
   // 보내는 중이거나 밀린 기록이 있으면, 서버의 옛 데이터로 덮어쓰지 않도록 먼저 보내고 나서 불러옴
   if (syncInFlight > 0) return;
+  lastLoadAt = Date.now();
+
+  // 서버 상태 확인 (일시 정지 중이면 여기서 멈춤 → 폰에 있는 기록을 그대로 보여줌)
+  try {
+    const ping = await supabaseClient.from('attendance').select('id').limit(1);
+    if (isRestrictedResponse(ping)) {
+      markServerRestricted(true);
+      return;
+    }
+    if (!ping.error) markServerRestricted(false);
+  } catch (e) { /* 네트워크 문제는 아래에서 처리 */ }
+
+  // DB 구조 확인을 먼저 해야, 밀린 기록을 올바른 테이블로 보냄
+  if (dbFeaturesCheckedAt === 0) await probeDbFeatures();
   if (outbox.length > 0) {
     await flushOutbox();
     if (outbox.length > 0) return;
   }
-  lastLoadAt = Date.now();
-  if (dbFeaturesCheckedAt === 0) await probeDbFeatures();
   const signatureBefore = stateSignature();
   try {
     // 1. 출석 불러오기 (취소/해제 동기화를 위해 서버 기준으로 재구성)
@@ -3901,6 +3918,7 @@ let outboxFlushing = false;
 let syncInFlight = 0;
 let initialSyncDone = false;
 let lastLoadOffline = false;
+let serverRestricted = false; // Supabase 무료 사용량 초과로 서버가 402로 응답하는 상태
 let offlineToastAt = 0;
 
 try {
@@ -3908,18 +3926,55 @@ try {
   if (Array.isArray(savedOutbox)) outbox = savedOutbox.filter(it => it && SYNC_FN_NAMES.includes(it.name) && Array.isArray(it.args));
 } catch (e) { outbox = []; }
 
+let outboxPhotoDropWarned = false;
 function persistOutbox() {
   try {
     localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
   } catch (e) {
-    // 사진처럼 큰 기록은 저장소에 못 담을 수 있음 → 앱이 켜져 있는 동안만 메모리에 보관
-    try { localStorage.removeItem(OUTBOX_KEY); } catch (e2) {}
+    // 저장 공간이 부족하면: 글자 기록은 모두 지키고, 사진만 빼고 저장 (앱을 끄지 않는 동안은 사진도 메모리에 남아 있음)
+    try {
+      const lean = outbox.map(it => ({
+        ...it,
+        args: it.args.map(a => (a && typeof a === 'object' && typeof a.photoUrl === 'string' && a.photoUrl.length > 2000)
+          ? { ...a, photoUrl: null }
+          : a)
+      }));
+      localStorage.setItem(OUTBOX_KEY, JSON.stringify(lean));
+      if (!outboxPhotoDropWarned) {
+        outboxPhotoDropWarned = true;
+        showToast('📷 폰 저장 공간이 부족해서, 앱을 완전히 끄면 대기 중인 식단 사진은 빠지고 글만 올라가요.', 'warn');
+      }
+    } catch (e2) {
+      try { localStorage.removeItem(OUTBOX_KEY); } catch (e3) {}
+    }
+  }
+  updateSyncStatus();
+}
+
+// 402 = Supabase 무료 사용량 초과로 서비스가 일시 정지된 상태
+function isRestrictedResponse(res) {
+  return !!res && (res.status === 402 || (res.error && /\b402\b|restricted|exceeded.*quota|quota/i.test(String(res.error.message || ''))));
+}
+
+function markServerRestricted(on) {
+  if (serverRestricted === on) return;
+  serverRestricted = on;
+  if (on) {
+    showToast('⏸️ 서버가 무료 사용량 초과로 일시 정지됐어요.\n기록은 폰에 모아뒀다가 풀리면 자동으로 올릴게요.', 'warn');
+  } else {
+    showToast('✅ 서버 연결이 다시 됐어요. 모아둔 기록을 올리는 중이에요.', 'success');
   }
   updateSyncStatus();
 }
 
 async function mustOk(query) {
   const res = await query;
+  if (isRestrictedResponse(res)) {
+    markServerRestricted(true);
+    const err = new Error('SERVICE_RESTRICTED');
+    err.restricted = true;
+    throw err;
+  }
   if (res && res.error) throw res.error;
   return res;
 }
@@ -3928,6 +3983,8 @@ async function mustOk(query) {
 function isNetworkError(err) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   if (!err) return false;
+  // 서버 일시 정지(402)도 '나중에 다시 보내면 되는 것'으로 취급
+  if (err.restricted || err.status === 402 || /\b402\b|SERVICE_RESTRICTED/.test(String(err.message || ''))) return true;
   if (err.code || err.status) return false;
   return /fetch|network|load failed|timeout|abort/i.test(String(err.message || err));
 }
@@ -3946,6 +4003,7 @@ function handleSyncFailure(name, args, err) {
   if (isNetworkError(err)) {
     outbox.push({ name, args, at: Date.now() });
     persistOutbox();
+    if (serverRestricted) return; // 일시 정지 안내는 이미 띄움
     if (Date.now() - offlineToastAt > 8000) {
       offlineToastAt = Date.now();
       showToast('📡 연결이 불안정해서 아직 저장되지 않았어요.\n연결되면 자동으로 다시 보낼게요.', 'warn');
@@ -3985,7 +4043,7 @@ async function flushOutbox(manual = false) {
         await SYNC_ORIGINALS[item.name](...item.args);
         sent++;
       } catch (err) {
-        if (isNetworkError(err)) break; // 아직 연결 안 됨 → 다음 기회에
+        if (isNetworkError(err)) break; // 아직 연결 안 됨 / 서버 일시 정지 → 다음 기회에
         console.error(`outbox item rejected: ${item.name}`, err);
         showToast(`⚠️ ${SYNC_FN_LABELS[item.name] || '기록'} 1건은 서버에서 거절되어 저장하지 못했어요.`, 'error');
       }
@@ -4001,7 +4059,9 @@ async function flushOutbox(manual = false) {
     showToast(`✅ 밀린 기록 ${sent}건을 저장했어요.`, 'success');
     loadFromSupabase(true);
   } else if (manual && outbox.length > 0) {
-    showToast('아직 연결되지 않았어요. 잠시 후 다시 시도할게요.', 'warn');
+    showToast(serverRestricted
+      ? '서버가 아직 일시 정지 상태예요. 풀리면 자동으로 올릴게요.'
+      : '아직 연결되지 않았어요. 잠시 후 다시 시도할게요.', 'warn');
   }
 }
 
@@ -4010,7 +4070,9 @@ function updateSyncStatus() {
   const el = document.getElementById('sync-status');
   if (!el) return;
   let text = '', cls = '';
-  if (outbox.length > 0) {
+  if (supabaseClient && serverRestricted) {
+    text = `⏸️ 서버 일시 정지 (무료 사용량 초과)${outbox.length ? ` · 폰에 보관 중 ${outbox.length}건` : ''}`; cls = 'pending';
+  } else if (outbox.length > 0) {
     text = `📡 저장 대기 ${outbox.length}건 · 눌러서 다시 보내기`; cls = 'pending';
   } else if (supabaseClient && lastLoadOffline) {
     text = '📴 오프라인 · 저장해둔 기록을 보여주고 있어요'; cls = 'offline';
